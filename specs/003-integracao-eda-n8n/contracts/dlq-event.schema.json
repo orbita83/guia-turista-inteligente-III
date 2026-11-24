@@ -10,7 +10,7 @@
     "event_type": { "const": "turismo.falha" },
     "event_id": { "type": "string", "format": "uuid" },
     "occurred_at": { "type": "string", "format": "date-time" },
-    "trace_id": { "type": "string", "description": "Mesmo valor do X-Request-ID devolvido ao usuário" },
+    "trace_id": { "type": "string", "description": "Mesmo valor do X-Request-ID devolvido ao usuário (string opaca: UUID v4 com ou sem hífens, conforme middleware/rota)" },
     "environment": { "type": "string", "enum": ["local", "staging", "production"] },
     "is_test": { "type": "boolean", "default": false, "description": "true quando gerado por /api/v1/suporte/testardlq" },
     "request": {

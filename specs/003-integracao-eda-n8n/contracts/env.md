@@ -14,6 +14,11 @@ Sem `SUPPORT_API_KEY`, os endpoints de suporte respondem `503`.
 
 ## n8n (credenciais e variáveis do próprio n8n, nunca no repositório)
 
+> **Compatibilidade de planos:** `Variables ($vars.*)` só existem nos planos Pro/Enterprise do n8n.
+> No n8n Community (self-hosted gratuito) ou Cloud Starter, usar variáveis de ambiente (`$env.*`) ou um nó
+> `Config (Set)` para `TELEGRAM_SUPPORT_CHAT_ID` e `BACKEND_BASE_URL`, e credencial **Header Auth**
+> para `X-Support-Key` (nunca gravar segredos em texto puro nos JSONs exportados em `docs/n8n/`).
+
 | Nome | Uso |
 | --- | --- |
 | Credencial **Telegram API** (token do BotFather) | Workflows DLQ e ChatOps |
