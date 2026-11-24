@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dispatch-event.schema.json",
+  "title": "Pedido de entrega do roteiro ao webhook turismo-despachar-roteiro",
+  "description": "Enviado pelo backend em BackgroundTasks depois que o usuário escolhe o canal. Substitui o download manual. O n8n monta o HTML transacional ou a mensagem de WhatsApp a partir destes dados.",
+  "type": "object",
+  "required": ["event_type", "event_id", "occurred_at", "trace_id", "channel", "recipient", "language", "itinerary"],
+  "additionalProperties": false,
+  "properties": {
+    "event_type": { "const": "turismo.roteiro.despachar" },
+    "event_id": { "type": "string", "format": "uuid" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "trace_id": { "type": "string" },
+    "channel": { "type": "string", "enum": ["email", "whatsapp"] },
+    "recipient": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "phone": { "type": "string", "pattern": "^\\+[1-9][0-9]{7,14}$", "description": "Formato E.164, ex.: +5586999999999" }
+      },
+      "description": "email obrigatório quando channel=email; phone obrigatório quando channel=whatsapp"
+    },
+    "language": { "type": "string", "description": "Um dos códigos de i18n.md" },
+    "itinerary": {
+      "type": "object",
+      "required": ["trip_id", "title", "origin", "destination", "days"],
+      "additionalProperties": false,
+      "properties": {
+        "trip_id": { "type": "string" },
+        "title": { "type": "string" },
+        "origin": { "type": "string", "examples": ["Teresina - PI"] },
+        "destination": { "type": "string", "examples": ["Piripiri - PI"] },
+        "distance_km": { "type": "number" },
+        "duration_min": { "type": "number" },
+        "summary": { "type": "string" },
+        "days": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["day", "activities"],
+            "properties": {
+              "day": { "type": "integer", "minimum": 1 },
+              "activities": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["title"],
+                  "properties": {
+                    "time": { "type": "string", "examples": ["09:00"] },
+                    "title": { "type": "string" },
+                    "description": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "map_url": { "type": "string", "format": "uri", "description": "Link do Google Maps já gerado pelo frontend" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "channel": { "const": "email" } } },
+      "then": { "properties": { "recipient": { "required": ["name", "email"] } } }
+    },
+    {
+      "if": { "properties": { "channel": { "const": "whatsapp" } } },
+      "then": { "properties": { "recipient": { "required": ["name", "phone"] } } }
+    }
+  ]
+}
