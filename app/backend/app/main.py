@@ -33,9 +33,12 @@ from app.core.storage import TripStorage
 from app.routers import auth, chat, despacho, postos, streaming, suporte, trips
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
+logging.getLogger("app").setLevel(logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,64}")
 

@@ -1,6 +1,7 @@
 """Testes de contrato e fumaça dos pontos de encaixe compartilhados do PR 0 (#18)."""
 
 import json
+import logging
 from typing import Any
 
 import jsonschema
@@ -153,3 +154,10 @@ async def test_publicar_evento_stub_accepts_fixed_signature(
     with caplog.at_level("INFO", logger="app.services.events"):
         await publicar_evento("turismo-dlq", DLQ_EVENT_EXAMPLE)
     assert "turismo-dlq" in caplog.text
+
+
+def test_logging_scopes_info_to_app_and_suppresses_httpx() -> None:
+    assert logging.getLogger("app").getEffectiveLevel() == logging.INFO
+    assert logging.getLogger("app.services.events").getEffectiveLevel() == logging.INFO
+    assert logging.getLogger("httpx").getEffectiveLevel() == logging.WARNING
+    assert logging.getLogger("httpcore").getEffectiveLevel() == logging.WARNING
