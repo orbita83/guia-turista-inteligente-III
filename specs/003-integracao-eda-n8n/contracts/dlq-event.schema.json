@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dlq-event.schema.json",
+  "title": "Evento de falha enviado ao webhook turismo-dlq",
+  "description": "Produzido pelo handler global de exceções do FastAPI em BackgroundTasks. O usuário recebe apenas a mensagem pública e o trace_id; o restante vai só para o Telegram da equipe.",
+  "type": "object",
+  "required": ["event_type", "event_id", "occurred_at", "trace_id", "environment", "request", "error"],
+  "additionalProperties": false,
+  "properties": {
+    "event_type": { "const": "turismo.falha" },
+    "event_id": { "type": "string", "format": "uuid" },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "trace_id": { "type": "string", "description": "Mesmo valor do X-Request-ID devolvido ao usuário (string opaca: UUID v4 com ou sem hífens, conforme middleware/rota)" },
+    "environment": { "type": "string", "enum": ["local", "staging", "production"] },
+    "is_test": { "type": "boolean", "default": false, "description": "true quando gerado por /api/v1/suporte/testardlq" },
+    "request": {
+      "type": "object",
+      "required": ["method", "route", "status_code"],
+      "additionalProperties": false,
+      "properties": {
+        "method": { "type": "string", "examples": ["POST"] },
+        "route": { "type": "string", "description": "Template da rota, sem dados do usuário", "examples": ["/api/v1/roteiros/planejar"] },
+        "status_code": { "type": "integer", "examples": [500, 502] },
+        "language": { "type": "string", "examples": ["pt-BR"] }
+      }
+    },
+    "error": {
+      "type": "object",
+      "required": ["type", "message", "stack_trace"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": "string", "examples": ["httpx.ReadTimeout"] },
+        "message": { "type": "string", "maxLength": 500 },
+        "stack_trace": { "type": "string", "maxLength": 3000, "description": "Truncado: o Telegram aceita até 4096 caracteres por mensagem" }
+      }
+    }
+  },
+  "examples": [
+    {
+      "event_type": "turismo.falha",
+      "event_id": "7d9f1c2e-3b4a-4c5d-8e6f-0a1b2c3d4e5f",
+      "occurred_at": "2026-11-19T18:30:00Z",
+      "trace_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+      "environment": "local",
+      "is_test": true,
+      "request": { "method": "POST", "route": "/api/v1/suporte/testardlq", "status_code": 500, "language": "pt-BR" },
+      "error": { "type": "RuntimeError", "message": "Falha simulada para teste da DLQ", "stack_trace": "Traceback (most recent call last): ..." }
+    }
+  ]
+}

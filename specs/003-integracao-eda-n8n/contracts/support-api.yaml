@@ -1,0 +1,132 @@
+openapi: 3.1.0
+info:
+  title: Contrato da API de Suporte (ChatOps)
+  version: 1.0.0
+  description: >-
+    Endpoints de operação usados exclusivamente pelo bot de ChatOps no n8n.
+    Todos exigem X-Support-Key. O endpoint atual /api/v1/operacao/telemetria
+    deixa de ser público e passa a ficar atrás desta mesma proteção.
+servers:
+  - url: http://localhost:8001
+security:
+  - supportKey: []
+paths:
+  /api/v1/suporte/status:
+    get:
+      summary: Saúde geral e estado dos circuit breakers
+      responses:
+        '200':
+          description: Estado atual
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, checked_at, dependencies]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, degraded, down]
+                  checked_at:
+                    type: string
+                    format: date-time
+                  dependencies:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, state]
+                      properties:
+                        name:
+                          type: string
+                          examples: [gemini, overpass, open_elevation]
+                        state:
+                          type: string
+                          enum: [closed, open, half_open]
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/NotConfigured' }
+  /api/v1/suporte/uptime:
+    get:
+      summary: Tempo desde o início do processo
+      responses:
+        '200':
+          description: Uptime
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [started_at, uptime_seconds, uptime_human]
+                properties:
+                  started_at:
+                    type: string
+                    format: date-time
+                  uptime_seconds:
+                    type: integer
+                    minimum: 0
+                  uptime_human:
+                    type: string
+                    examples: ['2h 14min']
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/NotConfigured' }
+  /api/v1/suporte/telemetria:
+    get:
+      summary: Métricas internas (removidas da interface pública)
+      responses:
+        '200':
+          description: Resumo de telemetria
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests_total, errors_total, latency_p95_ms, in_flight, dlq_events_total]
+                properties:
+                  requests_total:
+                    type: integer
+                  errors_total:
+                    type: integer
+                  latency_p95_ms:
+                    type: number
+                  in_flight:
+                    type: integer
+                  dlq_events_total:
+                    type: integer
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/NotConfigured' }
+  /api/v1/suporte/testardlq:
+    post:
+      summary: Dispara uma falha simulada para validar o fluxo DLQ → Telegram
+      responses:
+        '202':
+          description: Evento de teste agendado em BackgroundTasks
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [trace_id, scheduled]
+                properties:
+                  trace_id:
+                    type: string
+                    format: uuid
+                  scheduled:
+                    type: boolean
+                    const: true
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '503': { $ref: '#/components/responses/NotConfigured' }
+components:
+  securitySchemes:
+    supportKey:
+      type: apiKey
+      in: header
+      name: X-Support-Key
+  responses:
+    Unauthorized:
+      description: Cabeçalho X-Support-Key ausente ou inválido (comparação em tempo constante)
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [detail]
+            properties:
+              detail:
+                type: string
+                const: Não autorizado.
+    NotConfigured:
+      description: SUPPORT_API_KEY não configurada no servidor

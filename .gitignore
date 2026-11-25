@@ -72,5 +72,9 @@ Desktop.ini
 # Desenvolvimento
 /.specify
 /.specs
-/specs
+/specs/*
+!/specs/003-integracao-eda-n8n/
+/specs/003-integracao-eda-n8n/*
+!/specs/003-integracao-eda-n8n/contracts/
+!/specs/003-integracao-eda-n8n/MATRIZ.md
 AGENTS.md

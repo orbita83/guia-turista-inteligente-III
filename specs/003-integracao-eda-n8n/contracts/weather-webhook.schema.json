@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "weather-webhook.schema.json",
+  "title": "Webhook turismo-clima (pedido e resposta)",
+  "description": "Chamada síncrona: o n8n consulta o Open-Meteo, avalia chuva e temperatura e pede orientações ao Gemini, respondendo pelo nó Respond to Webhook.",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "required": ["trace_id", "latitude", "longitude", "start_date", "end_date", "language"],
+      "additionalProperties": false,
+      "properties": {
+        "trace_id": { "type": "string" },
+        "latitude": { "type": "number", "minimum": -34, "maximum": 6 },
+        "longitude": { "type": "number", "minimum": -74, "maximum": -34 },
+        "start_date": { "type": "string", "format": "date" },
+        "end_date": { "type": "string", "format": "date", "description": "No máximo 16 dias à frente (limite da previsão do Open-Meteo)" },
+        "language": { "type": "string" }
+      }
+    },
+    "response": {
+      "type": "object",
+      "required": ["days", "guidance", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "days": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["date", "temp_min_c", "temp_max_c", "precipitation_probability"],
+            "properties": {
+              "date": { "type": "string", "format": "date" },
+              "temp_min_c": { "type": "number" },
+              "temp_max_c": { "type": "number" },
+              "precipitation_probability": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "alert": { "type": "string", "enum": ["none", "rain", "heat", "rain_and_heat"] }
+            }
+          }
+        },
+        "guidance": { "type": "string", "description": "Orientações do Gemini, no idioma pedido" },
+        "source": { "const": "open-meteo" }
+      }
+    }
+  },
+  "description_rules": "alert=rain quando precipitation_probability >= 60; alert=heat quando temp_max_c >= 35. Valores a confirmar na reunião."
+}
