@@ -181,3 +181,13 @@ O que bloqueia cada uma está em "Depende de" dentro da issue. Use o ID nas conv
 | T0019 | #20 smoke test | Mateus | Qui tarde |
 | T0020 | #16 clima (bônus) | Cássio | só se sobrar tempo |
 | T0021 | #21 CI (opcional) | quem sobrar | só se sobrar tempo |
+
+## 11. Regras de conclusão (valem para todas as issues e para agentes de IA)
+
+Todas as issues têm checkboxes em "Como fazer" e em "Critérios de aceite". Regras:
+
+1. **Só marque o checkbox depois que a ação estiver concluída e verificável**: PR mesclado, comando verde, workflow ativo, print salvo. Marcar antes é proibido.
+2. **A issue só fecha com todos os checkboxes marcados.** Item cortado por falta de tempo **não é marcado**: risque com `~~...~~` e escreva "CORTADO por <nome>: <motivo>".
+3. **Deixe a prova** em um comentário (link do PR, saída do comando ou print). Sem prova, o revisor desmarca.
+4. **Agentes de IA:** não marque por dedução. Execute o passo, confira o resultado e só então marque. Não edite arquivos fora de "Pode editar" (seção 3). Se um passo exigir arquivo de outro dono, pare e peça ao dono. Não invente credenciais, URLs, CNPJs ou dados de teste apresentados como reais.
+5. Nas issues com duas entregas (T0007 = 4a/4b, T0005 = 13a/13b, T0004 = template/montagem), os passos de cada entrega só são marcados quando o PR **daquela** entrega for mesclado.
