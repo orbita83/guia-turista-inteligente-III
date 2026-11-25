@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import AnyUrl, BaseModel, ConfigDict, EmailStr, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, model_validator
 
 DLQ_EVENT_EXAMPLE: dict[str, Any] = {
     "event_type": "turismo.falha",
@@ -170,7 +170,7 @@ class Itinerary(BaseModel):
     duration_min: float | None = None
     summary: str | None = None
     days: list[ItineraryDay] = Field(min_length=1)
-    map_url: AnyUrl | None = None
+    map_url: HttpUrl | None = None
 
 
 class DispatchEvent(BaseModel):

@@ -15,6 +15,7 @@ from app.routers import chat, despacho, postos, suporte
 from app.schemas.events import (
     DISPATCH_EVENT_EXAMPLE,
     DLQ_EVENT_EXAMPLE,
+    ITINERARY_EXAMPLE,
     WEATHER_REQUEST_EXAMPLE,
     WEATHER_RESPONSE_EXAMPLE,
     DispatchEvent,
@@ -123,6 +124,19 @@ def test_dispatch_event_and_itinerary_match_json_schema() -> None:
                 "recipient": {"name": "Sem Telefone", "email": "a@example.com"},
             }
         )
+
+
+@pytest.mark.parametrize(
+    "unsafe_url",
+    [
+        "javascript:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "ftp://example.com/rota",
+    ],
+)
+def test_itinerary_map_url_rejects_non_http_schemes(unsafe_url: str) -> None:
+    with pytest.raises(ValidationError):
+        Itinerary.model_validate({**ITINERARY_EXAMPLE, "map_url": unsafe_url})
 
 
 def test_weather_models_match_json_schema() -> None:
