@@ -23,11 +23,14 @@ contrato muda sem avisar no grupo e atualizar este arquivo.
 - O backend envia eventos ao n8n sempre em `BackgroundTasks`; uma falha no envio
   é registrada em log e **nunca** quebra a resposta ao usuário.
 - Campos são nomeados em inglês; textos exibidos ao usuário ficam em PT-BR ou no idioma pedido.
+- O mesmo `event_id` pode chegar duas vezes. O n8n **ignora** um `event_id` já visto (e o despacho de e-mail é idempotente por `event_id`).
+- Os eventos **não** têm `schema_version` (decisão de escopo: 3 dias; os JSON Schemas usam `additionalProperties: false`).
+- `trace_id` é uma string opaca: o mesmo valor do `X-Request-ID` da requisição (hoje 32 caracteres sem hífens).
 
-## Decisões a tomar na reunião
+## Decisões tomadas
 
-- [ ] Origem da "avaliação" do posto (Google Places, nota calculada ou dados de teste)
-- [ ] Canal de e-mail: Gmail ou Resend
-- [ ] API de WhatsApp: Meta Cloud API, Twilio, Evolution API ou só e-mail
-- [ ] URL pública do n8n (n8n Cloud ou túnel do n8n local)
-- [ ] Quem guarda os segredos reais (nunca no repositório)
+- [x] Avaliação do posto: Google Places, rodado **uma vez**, offline, por script (T0010, Vitor), gravando `rating` no JSON estático. Sem chave ou sem faturamento ativo, `rating: null` (aceito pelo contrato). O backend nunca chama o Google Places.
+- [x] E-mail: SMTP do Gmail com senha de app (`cred-gmail`); plano B: nó Gmail com OAuth.
+- [x] WhatsApp: sandbox da Twilio, prioridade 2 (cortar se travar).
+- [x] URL pública do n8n: n8n Cloud, conta única do workspace (a URL real é entregue por canal privado; o repositório só documenta o formato `https://<workspace>.app.n8n.cloud/webhook`).
+- [x] Segredos: nunca no repositório; trocados por canal privado entre as pessoas.
