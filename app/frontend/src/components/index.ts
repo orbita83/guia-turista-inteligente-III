@@ -1,4 +1,7 @@
 export { AppHeader, LoginCard, UserBar } from './Header';
+export { ChatIA } from './ChatIA';
+export { EnvioRoteiro } from './EnvioRoteiro';
+export { ErroAmigavel } from './ErroAmigavel';
 export { HistoricoViagens, ViagemCard } from './HistoricoViagens';
 export { MapaRota } from './MapaRota';
 export { RoteiroForm } from './RoteiroForm';

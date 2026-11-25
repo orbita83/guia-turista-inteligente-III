@@ -309,7 +309,7 @@ function parsePlanTripResponse(value: unknown): Omit<PlanTripResponse, 'metadata
   };
 }
 
-function requestHeaders(init?: RequestInit): Headers {
+export function requestHeaders(init?: RequestInit): Headers {
   const headers = new Headers(init?.headers);
   headers.set('Accept', 'application/json');
   if (init?.body) headers.set('Content-Type', 'application/json');
@@ -337,7 +337,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     credentials: 'include',
