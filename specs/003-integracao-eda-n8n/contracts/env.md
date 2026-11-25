@@ -18,6 +18,8 @@ Sem `SUPPORT_API_KEY`, os endpoints de suporte respondem `503`.
 > No n8n Community (self-hosted gratuito) ou Cloud Starter, usar variáveis de ambiente (`$env.*`) ou um nó
 > `Config (Set)` para `TELEGRAM_SUPPORT_CHAT_ID` e `BACKEND_BASE_URL`, e credencial **Header Auth**
 > para `X-Support-Key` (nunca gravar segredos em texto puro nos JSONs exportados em `docs/n8n/`).
+>
+> **Decisão da equipe (n8n Cloud):** `TELEGRAM_SUPPORT_CHAT_ID` e `BACKEND_BASE_URL` ficam em um nó `Set` chamado `Config`, no início de cada workflow; não use `$env.*` nem `Variables`. O Chat ID real **não** vai nos JSONs exportados em `docs/n8n/` (troque por `<TELEGRAM_SUPPORT_CHAT_ID>` antes do commit). A URL real do workspace e os segredos são entregues por canal privado; este arquivo só documenta o formato (`https://<workspace>.app.n8n.cloud/webhook`).
 
 | Nome | Uso |
 | --- | --- |
