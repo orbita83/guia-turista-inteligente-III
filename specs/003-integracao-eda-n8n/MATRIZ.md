@@ -79,7 +79,7 @@ Estes nomes não mudam. As issues usam exatamente estes.
 | Router de chat | `routers/chat.py`, prefixo `/api/v1/chat` |
 | Router de despacho | `routers/despacho.py`, prefixo `/api/v1/despacho` (**não** fica em `/api/v1/roteiros`, para não colidir com `/{trip_id}`) |
 | Modelos dos contratos | `schemas/events.py` |
-| Publicador de eventos | `services/events.py`, função `publicar_evento(background_tasks, webhook_path, payload)` |
+| Publicador de eventos | `services/events.py`, função `async publicar_evento(webhook_path, payload)`, agendada com `background_tasks.add_task(publicar_evento, "turismo-dlq", payload)` |
 | Serviço de postos ANP | `services/postos_anp_service.py` (o `postos_service.py` existente **não** muda) |
 | Serviço de despacho | `services/dispatch.py` |
 

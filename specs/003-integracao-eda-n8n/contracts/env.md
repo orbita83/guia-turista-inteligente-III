@@ -7,7 +7,8 @@
 | `N8N_WEBHOOK_BASE_URL` | `https://equipe.app.n8n.cloud/webhook` | Base dos webhooks; o backend monta `<base>/turismo-dlq` etc. |
 | `N8N_WEBHOOK_SECRET` | `gere-um-segredo-longo` | Enviado no cabeçalho `X-Webhook-Secret` em toda chamada ao n8n |
 | `N8N_TIMEOUT_SECONDS` | `5` | Timeout do `httpx` ao chamar o n8n |
-| `SUPPORT_API_KEY` | `gere-outra-chave-longa` | Valor esperado no cabeçalho `X-Support-Key` dos endpoints de suporte |
+| `SUPPORT_API_KEY` | `gere-outra-chave-longa` | Valor esperado no cabeçalho `X-Support-Key` dos endpoints de suporte (diferente de `N8N_WEBHOOK_SECRET`) |
+| `APP_ENV` | `local` | `local`, `staging` ou `production`; vai no campo `environment` do evento DLQ |
 
 Sem `N8N_WEBHOOK_BASE_URL`, o backend só registra o evento em log (modo local).
 Sem `SUPPORT_API_KEY`, os endpoints de suporte respondem `503`.
@@ -28,7 +29,7 @@ Sem `SUPPORT_API_KEY`, os endpoints de suporte respondem `503`.
 | `BACKEND_BASE_URL` | URL do FastAPI que o ChatOps chama (ex.: túnel para `localhost:8001`) |
 | `SUPPORT_API_KEY` | Mesmo valor do backend, enviado no `X-Support-Key` |
 | Credencial **Header Auth** (`X-Webhook-Secret`) | Proteção dos webhooks |
-| Credencial **Gmail** ou **Resend** | Entrega de e-mail |
+| Credencial **SMTP** `cred-gmail` (Gmail com senha de app); plano B: nó Gmail com OAuth | Entrega de e-mail |
 | Credencial da API de WhatsApp | Entrega por WhatsApp |
 | Credencial **Gemini** | Orientações de clima |
 

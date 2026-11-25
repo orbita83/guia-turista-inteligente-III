@@ -37,7 +37,8 @@ paths:
                       properties:
                         name:
                           type: string
-                          examples: [gemini, overpass, open_elevation]
+                          description: Nome do circuit breaker do backend (hoje apenas `weather` e `guide`)
+                          examples: [weather, guide]
                         state:
                           type: string
                           enum: [closed, open, half_open]
@@ -76,14 +77,15 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [requests_total, errors_total, latency_p95_ms, in_flight, dlq_events_total]
+                required: [requests_total, errors_total, in_flight, dlq_events_total]
                 properties:
                   requests_total:
                     type: integer
                   errors_total:
                     type: integer
                   latency_p95_ms:
-                    type: number
+                    type: [number, "null"]
+                    description: Opcional; null quando o backend não consegue calcular o p95
                   in_flight:
                     type: integer
                   dlq_events_total:
@@ -104,7 +106,7 @@ paths:
                 properties:
                   trace_id:
                     type: string
-                    format: uuid
+                    description: Mesmo valor do X-Request-ID da requisição (string opaca; hoje 32 caracteres sem hífens)
                   scheduled:
                     type: boolean
                     const: true
