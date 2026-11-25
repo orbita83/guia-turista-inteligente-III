@@ -152,3 +152,32 @@ Prints nunca mostram tokens, chaves, e-mail pessoal completo ou número de telef
 ## 9. Se faltar tempo, corte nesta ordem
 
 1. #21 (CI) 2. WhatsApp na #14 3. Workflow de clima (#16) 4. Idiomas além de `pt-BR`, `en` e `ar` na interface 5. Métricas extras.
+
+## 10. Ordem das tarefas (ID `T####`)
+
+O ID diz **quando a tarefa pode começar**, não que ela espera a anterior: tarefas da mesma onda rodam em paralelo.
+O que bloqueia cada uma está em "Depende de" dentro da issue. Use o ID nas conversas ("T0007 pronta para revisão").
+
+| ID | Issue | Quem | Quando |
+| --- | --- | --- | --- |
+| T0001 | #1 contratos | Mailson | Qua manhã |
+| T0002 | #18 PR 0 (pontos de encaixe) | Mateus | Qua manhã |
+| T0003 | #5 bot e credenciais | Mailson | Qua manhã |
+| T0004 | #22 template do README | Alisson | Qua manhã |
+| T0005 | #13 idioma (backend primeiro, frontend por último) | Alisson | Qua |
+| T0006 | #2 handler da DLQ | Mateus | Qua |
+| T0007 | #4 endpoints de suporte | Mateus | Qua |
+| T0008 | #6 workflow DLQ | Mailson | Qua |
+| T0009 | #7 workflow ChatOps | Mailson | Qua |
+| T0010 | #8 base ANP | Vitor | Qua |
+| T0011 | #9 API de postos | Vitor | Qua |
+| T0012 | #11 chat (backend) | Alisson | Qua |
+| T0013 | #14 workflow de despacho | Cássio | Qua |
+| T0014 | #15 endpoint de despacho | Cássio | Qua |
+| T0015 | #10 pop-up de posto | Vitor | Qua–Qui |
+| T0016 | #12 chat (frontend) | Alisson | Qua–Qui |
+| T0017 | #3 higienização | Mateus | Qui |
+| T0018 | #19 túnel seguro | Mateus | Qui |
+| T0019 | #20 smoke test | Mateus | Qui tarde |
+| T0020 | #16 clima (bônus) | Cássio | só se sobrar tempo |
+| T0021 | #21 CI (opcional) | quem sobrar | só se sobrar tempo |
