@@ -1,0 +1,204 @@
+{
+  "name": "turismo-dlq",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "turismo-dlq",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {
+          "responseCode": {
+            "values": {
+              "responseCode": "customCode",
+              "customCode": 202
+            }
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "SELECT_CRED_WEBHOOK_HEADER",
+          "name": "cred-webhook-header"
+        }
+      },
+      "webhookId": "turismo-dlq"
+    },
+    {
+      "id": "config",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "telegram-chat-id",
+              "name": "TELEGRAM_SUPPORT_CHAT_ID",
+              "value": "<TELEGRAM_SUPPORT_CHAT_ID>",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      }
+    },
+    {
+      "id": "deduplicar-event-id",
+      "name": "Deduplicar event_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nconst event = (input && typeof input.body === 'object' && input.body !== null) ? input.body : input;\nconst chatId = String($('Config').first().json.TELEGRAM_SUPPORT_CHAT_ID ?? '').trim();\nif (!chatId || chatId === '<TELEGRAM_SUPPORT_CHAT_ID>') {\n  throw new Error('TELEGRAM_SUPPORT_CHAT_ID não configurado no nó Config.');\n}\nconst eventId = typeof event?.event_id === 'string' ? event.event_id.trim() : '';\nconst state = $getWorkflowStaticData('global');\nconst seen = Array.isArray(state.seenEventIds) ? state.seenEventIds : [];\nif (eventId && seen.includes(eventId)) {\n  return [];\n}\nreturn [{ json: { event, eventId, chatId } }];"
+      }
+    },
+    {
+      "id": "formatar-alerta-markdownv2",
+      "name": "Formatar alerta MarkdownV2",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const { event, eventId, chatId } = $input.first().json;\nconst escapeMdV2 = (v) => String(v ?? '').replace(/([\\\\_*\\[\\]()~`>#+\\-=|{}.!])/g, '\\\\$1');\nconst escapeCode = (v) => String(v ?? '').replace(/([\\\\`])/g, '\\\\$1');\nconst safeSliceEscaped = (str, maxLen) => {\n  if (maxLen <= 0) return '';\n  if (str.length <= maxLen) return str;\n  let sliced = str.slice(0, maxLen);\n  let backslashes = 0;\n  for (let i = sliced.length - 1; i >= 0 && sliced[i] === '\\\\'; i--) {\n    backslashes++;\n  }\n  if (backslashes % 2 === 1) {\n    sliced = sliced.slice(0, -1);\n  }\n  return sliced;\n};\nconst isTest = event?.is_test === true;\nconst title = isTest ? '\\\\[TESTE\\\\] 🚨 *Falha no Guia do Turista*' : '🚨 *Falha no Guia do Turista*';\nconst environment = event?.environment ?? 'desconhecido';\nconst method = event?.request?.method ?? 'N/A';\nconst route = event?.request?.route ?? 'N/A';\nconst statusCode = event?.request?.status_code ?? 'N/A';\nconst errorType = event?.error?.type ?? 'ErroDesconhecido';\nconst errorMessage = String(event?.error?.message ?? '');\nconst stackTrace = String(event?.error?.stack_trace ?? '').trim();\nconst traceId = String(event?.trace_id ?? 'sem-trace-id');\nconst occurredAt = String(event?.occurred_at ?? new Date().toISOString());\nconst buildHeader = (msgEscaped) => [\n  title,\n  `*Ambiente:* ${escapeMdV2(environment)}`,\n  `*Rota:* \\`${escapeCode(`${method} ${route}`)}\\` \\\\| *Status:* ${escapeMdV2(statusCode)}`,\n  `*Erro:* ${escapeMdV2(errorType)}`,\n  `*Mensagem:* ${msgEscaped}`,\n  `*Trace ID:* \\`${escapeCode(traceId)}\\``,\n  `*Horário:* ${escapeMdV2(occurredAt)}`,\n].join('\\n');\nconst msgEscaped = escapeMdV2(errorMessage);\nlet header = buildHeader(msgEscaped);\nif (header.length > 4096) {\n  const emptyHeader = buildHeader('');\n  const ellipsis = '\\\\.\\\\.\\\\.';\n  const availMsg = Math.max(0, 4096 - emptyHeader.length - ellipsis.length);\n  header = buildHeader(availMsg > 0 ? safeSliceEscaped(msgEscaped, availMsg) + ellipsis : '');\n  if (header.length > 4096) {\n    header = safeSliceEscaped(header, 4096);\n  }\n}\nlet text = header;\nif (stackTrace) {\n  const prefix = '\\n\\n*Stack trace:*\\n```\\n';\n  const suffix = '\\n```';\n  const truncSuffix = '\\n... (truncado)';\n  const stackEscaped = escapeCode(stackTrace);\n  const remaining = 4096 - header.length;\n  const fullBlock = `${prefix}${stackEscaped}${suffix}`;\n  if (fullBlock.length <= remaining) {\n    text = `${header}${fullBlock}`;\n  } else {\n    const maxContent = remaining - prefix.length - truncSuffix.length - suffix.length;\n    if (maxContent >= 40) {\n      const cutStack = safeSliceEscaped(stackEscaped, maxContent);\n      text = `${header}${prefix}${cutStack}${truncSuffix}${suffix}`;\n    }\n  }\n}\nif (text.length > 4096) {\n  text = safeSliceEscaped(text, 4096);\n}\nreturn [{ json: { chatId, eventId, text } }];"
+      }
+    },
+    {
+      "id": "enviar-alerta-telegram",
+      "name": "Enviar alerta Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "parse_mode": "MarkdownV2",
+          "appendAttribution": false
+        }
+      },
+      "credentials": {
+        "telegramApi": {
+          "id": "SELECT_CRED_TELEGRAM",
+          "name": "cred-telegram"
+        }
+      }
+    },
+    {
+      "id": "registrar-event-id",
+      "name": "Registrar event_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const { eventId } = $('Formatar alerta MarkdownV2').first().json;\nconst state = $getWorkflowStaticData('global');\nif (eventId) {\n  const seen = Array.isArray(state.seenEventIds) ? state.seenEventIds : [];\n  state.seenEventIds = [...seen.filter((id) => id !== eventId), eventId].slice(-50);\n}\nreturn [{ json: { alerted: true, event_id: eventId } }];"
+      }
+    },
+    {
+      "id": "leia-antes-de-ativar",
+      "name": "Leia antes de ativar",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -60
+      ],
+      "parameters": {
+        "content": "## #6 / T0008 — DLQ → alerta no Telegram (P0)\n1. Importe este JSON no n8n Cloud.\n2. Selecione as credenciais existentes: `cred-webhook-header` no nó **Webhook** e `cred-telegram` no nó **Enviar alerta Telegram**.\n3. No nó **Config**, substitua `<TELEGRAM_SUPPORT_CHAT_ID>` pelo Chat ID negativo do grupo técnico.\n4. Ligue **Active** (toggle no topo) e confira se a **Production URL** do Webhook termina em `/webhook/turismo-dlq`.\n5. Antes de exportar e commitar de volta no Git: restaure `<TELEGRAM_SUPPORT_CHAT_ID>` no nó **Config**, limpe qualquer `pinData` e rode `git grep` para garantir zero segredos ou Chat ID real.",
+        "height": 260,
+        "width": 720
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Deduplicar event_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicar event_id": {
+      "main": [
+        [
+          {
+            "node": "Formatar alerta MarkdownV2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formatar alerta MarkdownV2": {
+      "main": [
+        [
+          {
+            "node": "Enviar alerta Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar alerta Telegram": {
+      "main": [
+        [
+          {
+            "node": "Registrar event_id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataSuccessExecution": "none",
+    "saveDataErrorExecution": "none",
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "tags": []
+}
