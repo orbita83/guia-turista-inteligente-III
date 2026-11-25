@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  ChatIA,
   HistoricoViagens,
   LoginCard,
   MapaRota,
@@ -105,6 +106,8 @@ export function App() {
                   onSubmit={submitTrip}
                   onCancel={cancelTrip}
                 />
+
+                <ChatIA />
 
                 {activeTrip ? (
                   <>

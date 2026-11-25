@@ -32,6 +32,11 @@ class Settings(BaseSettings):
             "GEMINI_TIMEOUT_SECONDS", "GEMINI_TIMEOUT_SEGUNDOS"
         ),
     )
+    n8n_webhook_base_url: str = ""
+    n8n_webhook_secret: str = ""
+    n8n_timeout_seconds: float = 3.0
+    support_api_key: str = ""
+    app_env: Literal["local", "staging", "production"] = "local"
     session_cookie_name: str = "guia_turista_session"
     session_cookie_secure: bool = False
     session_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
@@ -63,6 +68,24 @@ class Settings(BaseSettings):
         except ValueError:
             return 60.0
         return timeout if 0 < timeout <= 120 else 60.0
+
+    @field_validator("n8n_timeout_seconds", mode="before")
+    @classmethod
+    def validate_n8n_timeout_seconds(cls, value: object) -> float:
+        if isinstance(value, bool) or not isinstance(value, (int, float, str)):
+            return 3.0
+        try:
+            timeout = float(value)
+        except ValueError:
+            return 3.0
+        return timeout if 0 < timeout <= 60 else 3.0
+
+    @field_validator("app_env", mode="before")
+    @classmethod
+    def normalize_app_env(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            return "local"
+        return value
 
     @property
     def states(self) -> dict[str, str]:

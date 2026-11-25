@@ -1,3 +1,4 @@
+import logging
 import re
 import threading
 from collections.abc import AsyncGenerator
@@ -29,7 +30,12 @@ from app.core.config import get_settings
 from app.core.dependencies import get_current_user
 from app.core.operational import operational_snapshot
 from app.core.storage import TripStorage
-from app.routers import auth, streaming, trips
+from app.routers import auth, chat, despacho, postos, streaming, suporte, trips
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 
 REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
@@ -124,11 +130,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await app.state.http_client.aclose()
 
 
+OPENAPI_TAGS = [
+    {"name": "autenticação", "description": "Sessão e autenticação de usuários."},
+    {"name": "roteiros", "description": "Planejamento, histórico e streaming de roteiros."},
+    {"name": "operação", "description": "Saúde, prontidão e métricas do processo."},
+    {"name": "suporte", "description": "Endpoints operacionais de suporte em /api/v1/suporte (spec 003)."},
+    {"name": "postos", "description": "Consulta de postos ANP em /api/v1/postos (spec 003)."},
+    {"name": "chat", "description": "Diálogo com IA para montagem de roteiro em /api/v1/chat (spec 003)."},
+    {"name": "despacho", "description": "Despacho multicanal de roteiros em /api/v1/despacho (spec 003)."},
+]
+
 settings = get_settings()
 app = FastAPI(
     title="Guia do Turista Inteligente API",
     version="1.0.0",
     lifespan=lifespan,
+    openapi_tags=OPENAPI_TAGS,
 )
 app.add_middleware(
     SessionMiddleware,
@@ -149,6 +166,10 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(trips.router)
 app.include_router(streaming.router)
+app.include_router(suporte.router)
+app.include_router(postos.router)
+app.include_router(chat.router)
+app.include_router(despacho.router)
 
 
 def _request_id(scope: Scope) -> str:
