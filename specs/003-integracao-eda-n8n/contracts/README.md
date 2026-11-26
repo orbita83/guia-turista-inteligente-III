@@ -27,6 +27,12 @@ contrato muda sem avisar no grupo e atualizar este arquivo.
 - Os eventos **não** têm `schema_version` (decisão de escopo: 3 dias; os JSON Schemas usam `additionalProperties: false`).
 - `trace_id` é uma string opaca: o mesmo valor do `X-Request-ID` da requisição (hoje 32 caracteres sem hífens).
 
+### Nulabilidade e contato por canal em `dispatch-event.schema.json`
+
+- **Campo opcional ausente:** aceito quando o produtor omite campos opcionais (por exemplo, na serialização Pydantic com `exclude_none=True`).
+- **Campo opcional explicitamente `null`:** aceito nos campos opcionais de `itinerary` (`distance_km`, `duration_min`, `summary`, `map_url`), de `itinerary.days[].activities[]` (`time`, `description`) e no contato não utilizado de `recipient` (`phone` em `channel=email`; `email` em `channel=whatsapp`), alinhado aos modelos Pydantic (`app/backend/app/schemas/events.py`) quando serializados sem `exclude_none=True`. Quando preenchidos (não nulos), esses campos continuam sujeitos aos tipos, formatos (`email`, `uri`) e padrões (`pattern` E.164) definidos no schema.
+- **Contato obrigatório por canal:** quando `channel=email`, `recipient.email` é obrigatório e não nulo (`string` válida no formato `email`); quando `channel=whatsapp`, `recipient.phone` é obrigatório e não nulo (`string` no padrão E.164). Ausência ou `null` no contato do canal escolhido é rejeitada.
+
 ## Decisões tomadas
 
 - [x] Avaliação do posto: Google Places, rodado **uma vez**, offline, por script (T0010, Vitor), gravando `rating` no JSON estático. Sem chave ou sem faturamento ativo, `rating: null` (aceito pelo contrato). O backend nunca chama o Google Places.
