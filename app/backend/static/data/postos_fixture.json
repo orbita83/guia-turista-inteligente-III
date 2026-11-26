@@ -1,0 +1,35 @@
+[
+  {
+    "cnpj": "00.000.000/0000-01",
+    "legal_name": "FIXTURE - posto A",
+    "rating": 0,
+    "authorized_since": "2020-01-01",
+    "authorization_years": 6,
+    "fuels": ["gasolina_comum"],
+    "latitude": -4.281,
+    "longitude": -41.777,
+    "data_reference_date": "2026-01-01"
+  },
+  {
+    "cnpj": "00.000.000/0000-02",
+    "legal_name": "FIXTURE - posto B",
+    "rating": null,
+    "authorized_since": "2015-01-01",
+    "authorization_years": 11,
+    "fuels": ["etanol"],
+    "latitude": -4.297,
+    "longitude": -41.778,
+    "data_reference_date": "2026-01-01"
+  },
+  {
+    "cnpj": "00.000.000/0000-03",
+    "legal_name": "FIXTURE - posto C",
+    "rating": 4.8,
+    "authorized_since": "2021-01-01",
+    "authorization_years": 5,
+    "fuels": ["diesel_s10"],
+    "latitude": -4.2445,
+    "longitude": -41.776007,
+    "data_reference_date": "2026-01-01"
+  }
+]
