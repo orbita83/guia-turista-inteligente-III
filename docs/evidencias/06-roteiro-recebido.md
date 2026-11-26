@@ -138,3 +138,20 @@ da caixa de entrada nem do grupo pelo agente.
 O teste de falha usa validação do destinatário, sem simular indisponibilidade
 real do servidor SMTP. O evento enviado à falha usa `en`; a apresentação no
 Telegram depende também do workflow da DLQ.
+
+### Confirmação da prévia organizada
+
+Em 26/11/2026, foi solicitado um novo envio em português com resumo curto,
+dois dias e atividades separadas por horário, título e descrição. O conteúdo
+era ilustrativo, sem as frases repetidas usadas no teste de texto longo.
+Não houve alteração adicional no código ou no layout do workflow.
+
+- Resposta observada: HTTP 202.
+- Assunto: `Seu roteiro: Prévia organizada do roteiro — teste T0013`.
+- Evento: `eb414c43-ff09-4cd2-abb3-7191f7508875`.
+- Rastreio: `54630a3e86804cf9b3186ad8e456dee3`.
+
+Cássio conferiu o e-mail e confirmou no chat que estava tudo certo. Essa
+confirmação valida a apresentação da prévia com conteúdo legível; não foi
+produzida nova captura pelo agente. A repetição de frases do primeiro envio
+serviu apenas para exercitar textos acima do antigo limite de 500 caracteres.
