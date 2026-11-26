@@ -1,9 +1,23 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vite-plus/test';
+import L from 'leaflet';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 
+import { buscarPostosAoLongoDaRota } from '../services/postosApi';
 import type { RotaAlternativa, Viagem } from '../types/domain';
+import type { PostoAnp, ResultadoPostosAnp } from '../types/postos';
 import { MapaRota } from './MapaRota';
+
+vi.mock('../services/postosApi');
+
+const buscarPostos = vi.mocked(buscarPostosAoLongoDaRota);
+const data_referencia = '2026-01-01';
+
+beforeEach(() => {
+  buscarPostos.mockReset().mockResolvedValue({ postos: [], data_reference_date: data_referencia });
+});
+
+afterEach(() => vi.restoreAllMocks());
 
 const trip: Viagem = {
   id: 'trip-1',
@@ -48,7 +62,7 @@ describe('F02 — geometria confirmada', () => {
       screen.getByText('Traçado rodoviário indisponível para esta viagem.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Distância informada: 8 km.')).toBeInTheDocument();
-    expect(screen.queryByRole('img', { name: /Traçado de/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: /Traçado de/i })).not.toBeInTheDocument();
   });
 
   it('desenha a geometria recebida sem inventar alternativa', () => {
@@ -57,7 +71,7 @@ describe('F02 — geometria confirmada', () => {
         viagem={{ ...trip, percurso: { ...trip.percurso, geometria: principal.coordenadas } }}
       />,
     );
-    expect(screen.getByRole('img', { name: /Traçado de Recife/i })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /Traçado de Recife/i })).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Rotas disponíveis' })).not.toBeInTheDocument();
   });
 
@@ -473,5 +487,127 @@ describe('F02 — geometria confirmada', () => {
     // Clica na Sugestão 02
     await user.click(screen.getByRole('button', { name: /Alternativa 1/i }));
     expect(onAlternativaChange).toHaveBeenCalledWith(0);
+  });
+});
+
+describe('postos ANP no mapa', () => {
+  const viagem = { ...trip, percurso: { ...trip.percurso, geometria: principal.coordenadas } };
+  const posto: PostoAnp = {
+    cnpj: '00.000.000/0000-01',
+    legal_name: 'FIXTURE - posto ANP',
+    authorized_since: '2014-01-01',
+    authorization_years: 12,
+    rating: null,
+    fuels: ['gasolina_comum', 'etanol', 'diesel_s10'],
+    latitude: -8.03,
+    longitude: -34.86,
+    distance_from_route_km: 0.1,
+    rank: 1,
+  };
+
+  function responderCom(...postos: PostoAnp[]) {
+    buscarPostos.mockResolvedValue({ postos, data_reference_date: data_referencia });
+  }
+
+  it('abre só por clique e mostra os cinco campos com texto seguro', async () => {
+    const nome = '<img src=x onerror="alert(1)"> FIXTURE';
+    responderCom({ ...posto, legal_name: nome });
+    const criarMarcador = vi.spyOn(L, 'marker');
+    render(<MapaRota viagem={viagem} />);
+    await screen.findByRole('button', { name: `Posto ANP: ${nome}` });
+    const marcador = criarMarcador.mock.results[0].value as L.Marker;
+
+    expect(marcador.isPopupOpen()).toBe(false);
+    marcador.fire('mouseover');
+    expect(marcador.isPopupOpen()).toBe(false);
+    marcador.fire('click', { latlng: marcador.getLatLng() });
+    expect(marcador.isPopupOpen()).toBe(true);
+
+    const campos = within(screen.getByText('Razão social').closest('dl')!);
+    expect(campos.getByText(nome)).toBeInTheDocument();
+    expect(campos.getByText('00.000.000/0000-01')).toBeInTheDocument();
+    expect(campos.getByText('Sem avaliação')).toBeInTheDocument();
+    expect(campos.getByText('Autorizado há 12 anos')).toBeInTheDocument();
+    expect(campos.getByText('Gasolina comum, Etanol, Diesel S10')).toBeInTheDocument();
+    expect(campos.queryByRole('img')).not.toBeInTheDocument();
+  });
+
+  it('abre com Enter no marcador focado e preserva o pop-up ao atualizar outros dados', async () => {
+    responderCom({ ...posto, rating: 0, authorization_years: 1 });
+    const user = userEvent.setup();
+    const { rerender } = render(<MapaRota viagem={viagem} />);
+    const marcador = await screen.findByRole('button', { name: 'Posto ANP: FIXTURE - posto ANP' });
+    expect(marcador).toHaveAttribute('tabindex', '0');
+    marcador.focus();
+    expect(marcador).toHaveFocus();
+    fireEvent.keyPress(marcador, { key: ' ', code: 'Space', charCode: 32, keyCode: 32 });
+    expect(screen.queryByText('0 / 5')).not.toBeInTheDocument();
+    fireEvent.keyPress(marcador, { key: 'Enter', code: 'Enter', charCode: 13, keyCode: 13 });
+    expect(screen.getByText('0 / 5')).toBeInTheDocument();
+    expect(screen.getByText('Autorizado há 1 ano')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Elétrico/ }));
+    rerender(
+      <MapaRota
+        viagem={{
+          ...viagem,
+          percurso: {
+            ...viagem.percurso,
+            geometria: principal.coordenadas.map(([lat, lon]) => [lat, lon]),
+            autonomia: {
+              sucesso: true,
+              solucaoSegura: true,
+              paradas: [],
+            },
+          },
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Posto ANP: FIXTURE - posto ANP' })).toBe(marcador);
+    expect(screen.getByText('0 / 5')).toBeInTheDocument();
+    expect(buscarPostos).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancela a consulta da rota anterior e ignora uma resposta atrasada', async () => {
+    let resolverAnterior: (resultado: ResultadoPostosAnp) => void = () => undefined;
+    buscarPostos.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolverAnterior = resolve;
+        }),
+    );
+    const { rerender } = render(<MapaRota viagem={viagem} />);
+    expect(screen.getByText('Carregando postos ANP…')).toBeInTheDocument();
+    expect(buscarPostos.mock.calls[0][1].aborted).toBe(false);
+
+    rerender(
+      <MapaRota
+        viagem={{
+          ...viagem,
+          percurso: {
+            ...viagem.percurso,
+            geometria: [
+              [-8.04, -34.87],
+              [-8.01, -34.85],
+            ],
+          },
+        }}
+      />,
+    );
+    expect(buscarPostos.mock.calls[0][1].aborted).toBe(true);
+    expect(await screen.findByText('Nenhum posto no trecho')).toBeInTheDocument();
+    await act(async () => {
+      resolverAnterior({ postos: [posto], data_reference_date: data_referencia });
+    });
+    expect(screen.queryByRole('button', { name: /Posto ANP:/ })).not.toBeInTheDocument();
+  });
+
+  it('mostra a falha da consulta sem esconder a rota', async () => {
+    buscarPostos.mockRejectedValueOnce(new Error('Falha de rede'));
+    render(<MapaRota viagem={viagem} />);
+    expect(
+      await screen.findByText('Não foi possível carregar os postos ANP para esta rota.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: /Traçado de Recife/i })).toBeInTheDocument();
   });
 });
