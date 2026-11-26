@@ -68,3 +68,11 @@ locais são aceitos pelo receptor da DLQ; não comprova a ativação do
 despacho, sua deduplicação ou a entrega do alerta no Telegram. A execução
 integrada continua pendente. O navegador não pôde ser controlado nesta
 rodada porque a ferramenta não conseguiu confirmar a URL atual com segurança.
+
+**Confirmação do alerta:** após esse POST, Cássio conferiu o grupo técnico
+do Telegram e confirmou no chat o recebimento do alerta `[TESTE]` de
+`InvalidRecipient` com `trace_id` começando por `b19e4bdf`, correspondente
+ao evento acima. A entrega no Telegram foi confirmada pelo responsável;
+a ferramenta não capturou uma nova imagem do grupo. Isso conclui o reteste
+direto do receptor da DLQ, mantendo pendentes a execução integrada pelo
+workflow de despacho publicado e a deduplicação em produção.
