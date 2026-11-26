@@ -20,6 +20,7 @@ from prometheus_client import (
     Histogram,
     generate_latest,
 )
+from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import Headers
 from starlette.middleware.sessions import SessionMiddleware
@@ -31,6 +32,11 @@ from app.core.dependencies import get_current_user
 from app.core.operational import operational_snapshot
 from app.core.storage import TripStorage
 from app.routers import auth, chat, despacho, postos, streaming, suporte, trips
+from app.services.events import (
+    construir_evento_dlq,
+    publicar_evento,
+    resolver_idioma_seguro,
+)
 
 logging.basicConfig(
     level=logging.WARNING,
@@ -39,6 +45,8 @@ logging.basicConfig(
 logging.getLogger("app").setLevel(logging.INFO)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
+
+logger = logging.getLogger(__name__)
 
 REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._-]{1,64}")
 
@@ -203,7 +211,9 @@ class RequestObservabilityMiddleware:
         started_at = perf_counter()
         _adjust_active_http_requests(1)
         request_id = _request_id(scope)
-        scope.setdefault("state", {})["request_id"] = request_id
+        state = scope.setdefault("state", {})
+        state["request_id"] = request_id
+        state["request_started_at"] = started_at
         status_code = 500
         metrics_recorded = False
 
@@ -250,6 +260,61 @@ class RequestObservabilityMiddleware:
 
 
 app.add_middleware(RequestObservabilityMiddleware)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    """Converte exceções não tratadas em resposta pública mínima e envia alerta à DLQ."""
+    trace_id = getattr(request.state, "request_id", None) or _request_id(request.scope)
+    started_at = getattr(request.state, "request_started_at", None)
+    elapsed = (
+        max(0.0, perf_counter() - started_at)
+        if isinstance(started_at, float)
+        else 0.0
+    )
+    route = _route_template(request.scope)
+    language = resolver_idioma_seguro(request.headers.get("accept-language"))
+
+    logger.error(
+        "Exceção não tratada capturada method=%s route=%s trace_id=%s error_type=%s",
+        request.method,
+        route,
+        trace_id,
+        type(exc).__name__,
+    )
+
+    payload = construir_evento_dlq(
+        exc=exc,
+        trace_id=trace_id,
+        method=request.method,
+        route=route,
+        status_code=500,
+        language=language,
+        is_test=False,
+    )
+
+    response_headers: dict[str, str] = {
+        "X-Request-ID": trace_id,
+        "X-Process-Time": f"{elapsed * 1000:.3f}ms",
+    }
+    origin = request.headers.get("origin")
+    if origin and origin in get_settings().allowed_origins:
+        response_headers["Access-Control-Allow-Origin"] = origin
+        response_headers["Access-Control-Allow-Credentials"] = "true"
+        response_headers["Access-Control-Expose-Headers"] = (
+            "X-Process-Time, X-Request-ID"
+        )
+        response_headers["Vary"] = "Origin"
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Algo deu errado. Informe o código ao suporte.",
+            "trace_id": trace_id,
+        },
+        headers=response_headers,
+        background=BackgroundTask(publicar_evento, "turismo-dlq", payload),
+    )
 
 
 @app.get("/healthz", tags=["operação"])
