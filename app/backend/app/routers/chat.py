@@ -51,15 +51,23 @@ def _chave_sessao_chat(request: Request, user: dict[str, Any]) -> str:
 def _verificar_cota_sessao(request: Request, user: dict[str, Any]) -> None:
     """Limita cada sessão a no máximo 20 mensagens por hora para proteger a cota do Gemini."""
     agora = time.monotonic()
+    chaves_expiradas: list[str] = []
+    for chave_existente, lista_ts in _HISTORICO_MENSAGENS_POR_SESSAO.items():
+        ativos = [
+            instante
+            for instante in lista_ts
+            if agora - instante < CHAT_RATE_LIMIT_WINDOW_SECONDS
+        ]
+        if ativos:
+            _HISTORICO_MENSAGENS_POR_SESSAO[chave_existente] = ativos
+        else:
+            chaves_expiradas.append(chave_existente)
+    for chave_expirada in chaves_expiradas:
+        _HISTORICO_MENSAGENS_POR_SESSAO.pop(chave_expirada, None)
+
     chave = _chave_sessao_chat(request, user)
-    timestamps = _HISTORICO_MENSAGENS_POR_SESSAO.get(chave, [])
-    recentes = [
-        instante
-        for instante in timestamps
-        if agora - instante < CHAT_RATE_LIMIT_WINDOW_SECONDS
-    ]
+    recentes = _HISTORICO_MENSAGENS_POR_SESSAO.get(chave, [])
     if len(recentes) >= MAX_CHAT_MESSAGES_PER_HOUR:
-        _HISTORICO_MENSAGENS_POR_SESSAO[chave] = recentes
         raise HTTPException(
             status_code=429,
             detail=(
@@ -93,6 +101,7 @@ async def enviar_mensagem_chat(
     """
     _verificar_cota_sessao(request, user)
     idioma = obter_idioma_requisicao(request)
+    _ = preparar_instrucao_idioma_chat(request)
     resultado = await conversar_roteiro(
         messages=[mensagem.model_dump() for mensagem in payload.messages],
         origin=payload.origin,

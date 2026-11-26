@@ -348,15 +348,14 @@ def _resolver_idioma_compat(accept_language: str | None) -> str:
         if not text or "=" not in text:
             return "pt-BR"
         key, value = (piece.strip() for piece in text.split("=", 1))
-        if not key or not value:
+        if not key or not value or key.lower() != "q":
             return "pt-BR"
-        if key.lower() == "q":
-            try:
-                weight = float(value)
-            except ValueError:
-                return "pt-BR"
-            if not (0.0 < weight <= 1.0):
-                return "pt-BR"
+        try:
+            weight = float(value)
+        except ValueError:
+            return "pt-BR"
+        if not (0.0 < weight <= 1.0):
+            return "pt-BR"
     return _FALLBACK_LANGUAGE_MAP.get(raw_code.lower(), "pt-BR")
 
 
@@ -456,46 +455,107 @@ def _parse_and_validate_chat_response(raw_text: str) -> dict[str, Any]:
     }
 
 
-def _build_fallback_itinerary(origin: str, destination: str) -> dict[str, Any]:
-    """Constrói um Itinerary de contingência válido pelo contrato quando a conversa conclui localmente."""
-    origem_limpa = clean_guide_text(origin).strip() or "Teresina - PI"
-    destino_limpo = clean_guide_text(destination).strip() or "Piripiri - PI"
+_FALLBACK_CHAT_TEMPLATES: dict[str, dict[str, str]] = {
+    "pt-BR": {
+        "step1": (
+            "Não consegui falar com a IA agora. Escolha o ritmo da viagem "
+            "(tranquilo, moderado ou intenso) para continuarmos montando seu roteiro."
+        ),
+        "step2": (
+            "Não consegui falar com a IA agora. Informe quem serão os acompanhantes "
+            "(sozinho, casal, família com crianças ou amigos)."
+        ),
+        "step3": (
+            "Não consegui falar com a IA agora. Quais são suas preferências e "
+            "restrições de gastronomia para a viagem?"
+        ),
+        "done": (
+            "Não consegui falar com a IA agora. Com base nas suas respostas de ritmo, "
+            "acompanhantes e gastronomia, montei um roteiro de contingência de "
+            "{origin} para {destination}."
+        ),
+        "title": "Roteiro {origin} a {destination}",
+        "summary": (
+            "Roteiro de contingência de {origin} para {destination} "
+            "considerando ritmo, acompanhantes e gastronomia local."
+        ),
+        "act1_title": "Centro histórico e atrativos principais de {destination}",
+        "act1_desc": "Passeio inicial pelos pontos culturais e patrimônios locais (confirme horários no destino).",
+        "act2_title": "Gastronomia regional em {destination}",
+        "act2_desc": "Refeição com pratos típicos locais respeitando suas preferências e restrições.",
+        "act3_title": "Passeio ao ar livre e mirantes de {destination}",
+        "act3_desc": "Atividade adaptada ao ritmo escolhido e ao perfil dos acompanhantes.",
+    },
+    "en": {
+        "step1": (
+            "I could not reach the AI right now. Please choose your travel pace "
+            "(relaxed, moderate, or intense) to continue planning your itinerary."
+        ),
+        "step2": (
+            "I could not reach the AI right now. Who is traveling with you "
+            "(solo, couple, family with children, or friends)?"
+        ),
+        "step3": (
+            "I could not reach the AI right now. What are your food preferences "
+            "and dietary restrictions for the trip?"
+        ),
+        "done": (
+            "I could not reach the AI right now. Based on your pace, companions, and food "
+            "preferences, I prepared a contingency itinerary from {origin} to {destination}."
+        ),
+        "title": "Itinerary {origin} to {destination}",
+        "summary": (
+            "Contingency itinerary from {origin} to {destination} "
+            "tailored to your travel pace, companions, and local cuisine."
+        ),
+        "act1_title": "Historic center and main landmarks of {destination}",
+        "act1_desc": "Morning walk around local cultural heritage sites (confirm opening hours locally).",
+        "act2_title": "Regional cuisine in {destination}",
+        "act2_desc": "Lunch featuring traditional local dishes matching your dietary preferences.",
+        "act3_title": "Outdoor sightseeing in {destination}",
+        "act3_desc": "Afternoon activity adapted to your chosen travel pace and companions.",
+    },
+}
+
+
+def _build_fallback_itinerary(
+    origin: str,
+    destination: str,
+    accept_language: str | None = None,
+) -> dict[str, Any]:
+    """Constrói um Itinerary de contingência válido sem fabricar distância/duração irreais."""
+    origem_limpa = clean_guide_text(origin).strip() or "Origem"
+    destino_limpo = clean_guide_text(destination).strip() or "Destino"
+    idioma = _resolver_idioma_compat(accept_language)
+    tpl = _FALLBACK_CHAT_TEMPLATES.get(idioma, _FALLBACK_CHAT_TEMPLATES["en"])
+    if idioma == "pt-BR":
+        tpl = _FALLBACK_CHAT_TEMPLATES["pt-BR"]
+
     itinerary = Itinerary.model_validate(
         {
             "trip_id": "trip-chat-contingencia-001",
-            "title": f"Roteiro {origem_limpa} a {destino_limpo}",
+            "title": tpl["title"].format(origin=origem_limpa, destination=destino_limpo),
             "origin": origem_limpa,
             "destination": destino_limpo,
-            "distance_km": 165.4,
-            "duration_min": 140.0,
-            "summary": (
-                f"Roteiro personalizado de {origem_limpa} para {destino_limpo} "
-                "considerando ritmo, acompanhantes e gastronomia regional."
-            ),
+            "summary": tpl["summary"].format(origin=origem_limpa, destination=destino_limpo),
             "days": [
                 {
                     "day": 1,
                     "activities": [
                         {
                             "time": "09:00",
-                            "title": "Parque Nacional de Sete Cidades",
-                            "description": (
-                                "Visita guiada às formações rochosas e inscrições rupestres."
-                            ),
+                            "title": tpl["act1_title"].format(destination=destino_limpo),
+                            "description": tpl["act1_desc"],
                         },
                         {
                             "time": "12:30",
-                            "title": "Almoço regional — Maria Isabel",
-                            "description": (
-                                "Degustação de culinária típica local conforme preferências informadas."
-                            ),
+                            "title": tpl["act2_title"].format(destination=destino_limpo),
+                            "description": tpl["act2_desc"],
                         },
                         {
                             "time": "15:30",
-                            "title": "Cachoeira do Urubu",
-                            "description": (
-                                "Passeio contemplativo e parada de lazer adaptada ao ritmo escolhido."
-                            ),
+                            "title": tpl["act3_title"].format(destination=destino_limpo),
+                            "description": tpl["act3_desc"],
                         },
                     ],
                 }
@@ -509,44 +569,38 @@ def _fallback_chat_response(
     messages: list[dict[str, str]],
     origin: str,
     destination: str,
+    accept_language: str | None = None,
 ) -> dict[str, Any]:
     """Contingência determinística por regras locais (ritmo -> acompanhantes -> gastronomia)."""
+    idioma = _resolver_idioma_compat(accept_language)
+    tpl = (
+        _FALLBACK_CHAT_TEMPLATES["pt-BR"]
+        if idioma == "pt-BR"
+        else _FALLBACK_CHAT_TEMPLATES["en"]
+    )
     user_turns = sum(1 for msg in messages if msg.get("role") == "user")
     if user_turns <= 1:
         return {
-            "reply": (
-                "Não consegui falar com a IA agora. Escolha o ritmo da viagem "
-                "(tranquilo, moderado ou intenso) para continuarmos montando seu roteiro."
-            ),
+            "reply": tpl["step1"],
             "done": False,
             "itinerary": None,
         }
     if user_turns == 2:
         return {
-            "reply": (
-                "Não consegui falar com a IA agora. Informe quem serão os acompanhantes "
-                "(sozinho, casal, família com crianças ou amigos)."
-            ),
+            "reply": tpl["step2"],
             "done": False,
             "itinerary": None,
         }
     if user_turns == 3:
         return {
-            "reply": (
-                "Não consegui falar com a IA agora. Quais são suas preferências e "
-                "restrições de gastronomia para a viagem?"
-            ),
+            "reply": tpl["step3"],
             "done": False,
             "itinerary": None,
         }
     return {
-        "reply": (
-            f"Não consegui falar com a IA agora. Com base nas suas respostas de ritmo, "
-            f"acompanhantes e gastronomia, montei um roteiro de contingência de "
-            f"{origin} para {destination}."
-        ),
+        "reply": tpl["done"].format(origin=origin, destination=destination),
         "done": True,
-        "itinerary": _build_fallback_itinerary(origin, destination),
+        "itinerary": _build_fallback_itinerary(origin, destination, idioma),
     }
 
 
@@ -592,7 +646,18 @@ def _request_chat_json(
         return response.text
 
 
-async def _executar_tentativas_chat_gemini(
+_NON_BREAKER_CHAT_FAILURE_REASONS: frozenset[str] = frozenset(
+    {
+        "chave_ausente",
+        "chave_invalida",
+        "acesso_negado",
+        "requisicao_ou_chave_invalida",
+        "resposta_inadequada",
+    }
+)
+
+
+async def _executar_tentativas_chat_gemini_com_diagnostico(
     messages: list[dict[str, str]],
     origin: str,
     destination: str,
@@ -600,10 +665,20 @@ async def _executar_tentativas_chat_gemini(
     api_key: str,
     timeout_seconds: float,
     accept_language: str | None = None,
-) -> dict[str, Any]:
-    """Tenta consultar e validar o JSON do Gemini, com 1 nova tentativa se o JSON for inválido."""
-    ultima_excecao: Exception | None = None
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Consulta o Gemini com deadline compartilhado e 1 retry em JSON inválido.
+
+    Retorna `(resposta, diagnostico)` sem lançar exceções de provedor para que o
+    `circuit_breaker.call(..., is_failure=...)` filtre erros 4xx/validação como em `trips.py`.
+    """
+    deadline = monotonic() + max(0.01, timeout_seconds)
+    motivo_falha = "falha_inesperada"
+
     for attempt in range(2):
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            motivo_falha = "timeout"
+            break
         task: asyncio.Future[str] | None = None
         try:
             task = asyncio.get_running_loop().run_in_executor(
@@ -613,24 +688,30 @@ async def _executar_tentativas_chat_gemini(
                 origin,
                 destination,
                 api_key,
-                timeout_seconds,
+                remaining,
                 accept_language,
             )
-            raw_text = await asyncio.wait_for(task, timeout=timeout_seconds)
-            return _parse_and_validate_chat_response(raw_text)
+            raw_text = await asyncio.wait_for(task, timeout=remaining)
+            validated = _parse_and_validate_chat_response(raw_text)
+            return validated, {"fallback_utilizado": False, "motivo": None}
         except asyncio.CancelledError:
             raise
-        except (ValueError, TypeError, ValidationError) as exc:
-            ultima_excecao = exc
+        except (ValueError, TypeError, ValidationError):
+            motivo_falha = "resposta_inadequada"
             if attempt == 0:
                 continue
-            raise
+            break
+        except Exception as exc:  # noqa: BLE001 - fronteira de provedor; diagnóstico interno
+            motivo_falha = _failure_reason(exc)
+            break
         finally:
             if task is not None and not task.done():
                 task.cancel()
-    if ultima_excecao is not None:
-        raise ultima_excecao
-    raise ValueError("falha_validacao_chat")
+
+    return (
+        _fallback_chat_response(messages, origin, destination, accept_language),
+        {"fallback_utilizado": True, "motivo": motivo_falha},
+    )
 
 
 async def conversar_roteiro(
@@ -647,14 +728,15 @@ async def conversar_roteiro(
 
     - Sem `api_key` ou com circuit breaker aberto: retorna fallback local (HTTP 200).
     - Em JSON inválido ou falha de validação do `Itinerary`: realiza 1 nova tentativa;
-      persistindo a falha, registra no breaker e retorna fallback local.
+      persistindo a falha, retorna fallback local sem abrir o circuit breaker compartilhado.
+    - Falhas de infraestrutura (timeout, rede, 429, 5xx) são contabilizadas no breaker `guide`.
     - Nunca registra o conteúdo das mensagens em log.
     """
     if not api_key.strip():
-        return _fallback_chat_response(messages, origin, destination)
+        return _fallback_chat_response(messages, origin, destination, accept_language)
 
-    async def _operacao() -> dict[str, Any]:
-        return await _executar_tentativas_chat_gemini(
+    async def _operacao() -> tuple[dict[str, Any], dict[str, Any]]:
+        return await _executar_tentativas_chat_gemini_com_diagnostico(
             messages,
             origin,
             destination,
@@ -664,16 +746,19 @@ async def conversar_roteiro(
         )
 
     if circuit_breaker is not None and callable(getattr(circuit_breaker, "call", None)):
-        resultado: dict[str, Any] = await circuit_breaker.call(
+        resposta, _ = await circuit_breaker.call(
             _operacao,
-            fallback=lambda: _fallback_chat_response(messages, origin, destination),
+            fallback=lambda: (
+                _fallback_chat_response(messages, origin, destination, accept_language),
+                {"fallback_utilizado": True, "motivo": "circuito_aberto"},
+            ),
+            is_failure=lambda result: (
+                result[1].get("fallback_utilizado") is True
+                and result[1].get("motivo") not in _NON_BREAKER_CHAT_FAILURE_REASONS
+            ),
         )
-        return resultado
+        return dict(resposta)
 
-    try:
-        return await _operacao()
-    except asyncio.CancelledError:
-        raise
-    except Exception:  # noqa: BLE001 - fronteira de provedor; não vaza detalhes nem mensagens
-        return _fallback_chat_response(messages, origin, destination)
+    resposta_direta, _ = await _operacao()
+    return resposta_direta
 

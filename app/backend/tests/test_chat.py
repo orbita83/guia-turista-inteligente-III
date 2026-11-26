@@ -92,6 +92,16 @@ def test_chat_rejeita_mais_de_12_mensagens_ou_textos_longos_com_422(
         )
         assert resp_content_longo.status_code == 422
 
+        resp_content_espacos_longo = client.post(
+            "/api/v1/chat/mensagens",
+            json={
+                "messages": [{"role": "user", "content": (" " * 1000) + "oi"}],
+                "origin": "Teresina - PI",
+                "destination": "Piripiri - PI",
+            },
+        )
+        assert resp_content_espacos_longo.status_code == 422
+
         resp_origin_longo = client.post(
             "/api/v1/chat/mensagens",
             json={
@@ -317,8 +327,57 @@ def test_chat_sem_gemini_api_key_responde_200_com_contingencia_guiada(
         assert r4.status_code == 200
         b4 = r4.json()
         assert b4["done"] is True
-        Itinerary.model_validate(b4["itinerary"])
+        itinerary_contingencia = Itinerary.model_validate(b4["itinerary"])
+        assert itinerary_contingencia.distance_km is None
+        assert itinerary_contingencia.duration_min is None
+
+        # Fallback em inglês (Accept-Language: en) mantém nomes próprios originais
+        r_en = client.post(
+            "/api/v1/chat/mensagens",
+            headers={"Accept-Language": "en"},
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+                "origin": "Teresina - PI",
+                "destination": "Parque Nacional de Sete Cidades",
+            },
+        )
+        assert r_en.status_code == 200
+        assert "I could not reach the AI right now" in r_en.json()["reply"]
     finally:
+        app.dependency_overrides.clear()
+        client.close()
+
+
+def test_chat_timeout_responde_200_com_fallback_e_contabiliza_no_circuit_breaker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _timeout_gemini(*args: Any, **kwargs: Any) -> str:
+        raise TimeoutError("Gemini timeout")
+
+    monkeypatch.setattr(guide, "_request_chat_json", _timeout_gemini)
+    client = _criar_cliente_autenticado(monkeypatch, gemini_timeout_seconds=0.05)
+    try:
+        breaker_guide = app.state.circuit_breakers["guide"]
+        breaker_guide.state = CircuitState.CLOSED
+        breaker_guide.failure_count = 0
+
+        resp = client.post(
+            "/api/v1/chat/mensagens",
+            json={
+                "messages": [{"role": "user", "content": "Quero viajar"}],
+                "origin": "Teresina - PI",
+                "destination": "Piripiri - PI",
+            },
+        )
+        assert resp.status_code == 200
+        assert "Não consegui falar com a IA agora" in resp.json()["reply"]
+        assert breaker_guide.failure_count == 1
+    finally:
+        if hasattr(app.state, "circuit_breakers") and "guide" in app.state.circuit_breakers:
+            breaker = app.state.circuit_breakers["guide"]
+            breaker.state = CircuitState.CLOSED
+            breaker.failure_count = 0
+            breaker.opened_at = None
         app.dependency_overrides.clear()
         client.close()
 
@@ -377,6 +436,8 @@ def test_chat_json_invalido_faz_uma_nova_tentativa_e_cai_em_fallback_se_persisti
         assert resp_fallback.status_code == 200
         assert tentativas_falha == 2
         assert "Não consegui falar com a IA agora" in resp_fallback.json()["reply"]
+        # JSON inválido não deve abrir o circuit breaker compartilhado 'guide'
+        assert app.state.circuit_breakers["guide"].failure_count == 0
     finally:
         app.dependency_overrides.clear()
         client.close()

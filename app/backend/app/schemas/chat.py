@@ -20,13 +20,13 @@ def _validar_e_higienizar_texto(
     max_length: int,
     nome_campo: str,
 ) -> str:
-    texto_bruto = valor.strip()
-    if not texto_bruto:
-        raise ValueError(f"O campo '{nome_campo}' não pode ser vazio.")
-    if len(texto_bruto) > max_length:
+    if len(valor) > max_length:
         raise ValueError(
             f"O campo '{nome_campo}' excede o limite de {max_length} caracteres."
         )
+    texto_bruto = valor.strip()
+    if not texto_bruto:
+        raise ValueError(f"O campo '{nome_campo}' não pode ser vazio.")
     higienizado = sanitize_input(texto_bruto, max_length=max_length)
     if not higienizado:
         raise ValueError(
