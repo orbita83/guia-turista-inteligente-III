@@ -76,3 +76,31 @@ ao evento acima. A entrega no Telegram foi confirmada pelo responsável;
 a ferramenta não capturou uma nova imagem do grupo. Isso conclui o reteste
 direto do receptor da DLQ, mantendo pendentes a execução integrada pelo
 workflow de despacho publicado e a deduplicação em produção.
+
+
+### Reteste pelo dispatcher publicado
+
+Após Cássio publicar o workflow, em 25/11/2026 foram enviados três
+pedidos à URL de produção do despacho, usando o segredo local:
+
+- envio valido: `HTTP 202`.
+- mesmo evento reenviado: `HTTP 202`.
+- falha pelo dispatcher publicado: `HTTP 202`.
+
+O envio válido e a repetição usaram o mesmo `event_id`: `d0b75fdd-feb0-4583-bbb9-cdeb10272953`.
+O teste de falha usou destinatário inválido, `event_id`
+`f6a0c061-1b8a-4dc1-a2ad-b69f35bd5335` e `trace_id`
+`818d4ae8bd9c4421ac9e24b802cf1a9f`.
+
+Essas respostas comprovam o recebimento pelo dispatcher de produção,
+mas não são suficientes, isoladamente, para comprovar ausência de
+e-mail duplicado ou entrega do alerta no Telegram. Cássio confirmou no chat o recebimento de exatamente um e-mail
+com assunto "Validação final de duplicidade T0013" após os dois pedidos
+com o mesmo `event_id`, e o alerta `InvalidRecipient` no Telegram com
+rastreio começando por `818d4ae8`. A confirmação das entregas foi feita
+pelo responsável, correlacionada aos eventos desta execução; não foi
+capturada nova imagem do grupo pela ferramenta.
+
+O reteste integrado e a duplicidade em produção ficam registrados como
+concluídos com essa atribuição. Resta anexar a captura 01b do workflow
+ativo e concluir a revisão/merge do PR #25.
