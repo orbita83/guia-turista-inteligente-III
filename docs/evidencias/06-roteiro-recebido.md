@@ -11,8 +11,11 @@ e a sequência `<script>alert(1)</script>` exibida como texto.
 
 **Como reproduzir:** configure as credenciais `cred-gmail` (SMTP) e
 `cred-webhook-header` nos nós correspondentes, e o remetente no nó `Config`.
-Clique em executar o workflow e envie um POST para a URL de teste do webhook,
-com `X-Webhook-Secret` e um evento válido de `dispatch-event.schema.json`.
+Na instância publicada, envie um POST para
+`<N8N_WEBHOOK_BASE_URL>/turismo-despachar-roteiro`, com a base terminando em
+`/webhook` (URL de produção), `X-Webhook-Secret` e um evento válido de
+`dispatch-event.schema.json`. O modo de teste é útil para depurar um envio,
+mas não comprova a deduplicação persistente.
 Use seu próprio e-mail, um UUID novo em `event_id`, dois dias de atividades
 e `language` igual a `pt-BR` ou `en`. Confira o `202`, a execução até
 `Registrar entrega` e o recebimento na caixa de entrada.
@@ -31,12 +34,17 @@ e `language` igual a `pt-BR` ou `en`. Confira o `202`, a execução até
 
 **Observações:** a captura é de uma entrega real, sem endereço de e-mail
 completo ou segredo visível. Os dados do roteiro são fictícios para teste.
-Após essa execução inicial, Cássio confirmou no chat que todos os testes
-restantes foram concluídos e solicitou o encerramento da issue. Essa
-confirmação inclui os critérios restantes de publicação, deduplicação e
-alerta pela DLQ; não representa uma nova execução observada pelo agente.
+Na revisão do PR #25, Mailson informou que a DLQ foi ativada em produção
+(PR #26). A confirmação anterior de conclusão pelo responsável não
+substitui a prova do reteste integrado: publicação do despacho, descarte
+de evento repetido e alerta no Telegram devem ser registrados com
+evidências antes da conclusão técnica da entrega.
 O JSON versionado é portável e sanitizado, com credenciais e remetente como
 marcadores e `active: false` para importação; esse campo não descreve o
 estado atual da instância da equipe. WhatsApp (P2) ficou fora da entrega
-combinada de e-mail em `pt-BR` e `en`. Esta seção é a contribuição de P5; o índice e as demais
-seções de evidências serão consolidados pelo responsável pela documentação.
+combinada de e-mail em `pt-BR` e `en`.
+
+Este arquivo é a contribuição de P5 para a Evidência 6. O README/índice
+compartilhado pertence à #22 (Alisson); esta entrega não cria nem substitui
+seu template. A seção pode ser incorporada ou vinculada pelo responsável
+quando a #22 for consolidada.
