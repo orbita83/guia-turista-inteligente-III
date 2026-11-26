@@ -1,5 +1,7 @@
 ## Evidência 6 — Roteiro recebido (Pessoa 5 — Cássio)
 
+**Evidência 1b — workflow ativo:** [01b-workflows-p5-n8n.png](01b-workflows-p5-n8n.png), captura fornecida por Cássio em 25/11/2026. Mostra o workflow completo `turismo-despachar-roteiro` e o indicador `Published`, sem segredos visíveis.
+
 **O que mostra:** e-mail real recebido pelo Gmail a partir do workflow
 `turismo-despachar-roteiro`, em inglês, com dois dias de atividades, link do mapa
 e a sequência `<script>alert(1)</script>` exibida como texto.
@@ -102,5 +104,5 @@ pelo responsável, correlacionada aos eventos desta execução; não foi
 capturada nova imagem do grupo pela ferramenta.
 
 O reteste integrado e a duplicidade em produção ficam registrados como
-concluídos com essa atribuição. Resta anexar a captura 01b do workflow
-ativo e concluir a revisão/merge do PR #25.
+concluídos com essa atribuição. A captura 01b do workflow ativo foi anexada. Resta concluir a
+revisão/merge do PR #25.
