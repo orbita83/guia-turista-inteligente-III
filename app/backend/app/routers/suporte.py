@@ -142,7 +142,7 @@ async def obter_status_suporte(request: Request) -> SupportStatusResponse:
     """Saúde geral do processo e estado real dos disjuntores."""
     checked_at = datetime.now(UTC).isoformat().replace("+00:00", "Z")
     breakers = getattr(request.app.state, "circuit_breakers", None)
-    if not isinstance(breakers, dict):
+    if not isinstance(breakers, dict) or not breakers:
         return SupportStatusResponse(
             status="down",
             checked_at=checked_at,

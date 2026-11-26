@@ -14,7 +14,7 @@ import jsonschema
 import pytest
 import respx
 import yaml  # type: ignore[import-untyped]
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 from starlette.types import Message
@@ -175,13 +175,16 @@ def test_respostas_reais_validam_contra_support_api_yaml_e_refletem_breakers(
         resp_dlq = client.post("/api/v1/suporte/testardlq", headers=headers)
         resp_telemetria = client.get("/api/v1/suporte/telemetria", headers=headers)
 
-        # Degrada o breaker weather e valida transição de status -> degraded
+        # Degrada o breaker weather (OPEN e HALF_OPEN) e valida transição -> degraded
         breakers = client.app.state.circuit_breakers  # type: ignore[attr-defined]
         breakers["weather"].state = CircuitState.OPEN
-        resp_status_degraded = client.get("/api/v1/suporte/status", headers=headers)
+        resp_status_open = client.get("/api/v1/suporte/status", headers=headers)
+        breakers["weather"].state = CircuitState.HALF_OPEN
+        resp_status_half_open = client.get("/api/v1/suporte/status", headers=headers)
 
     assert resp_status_ok.status_code == 200
-    assert resp_status_degraded.status_code == 200
+    assert resp_status_open.status_code == 200
+    assert resp_status_half_open.status_code == 200
     assert resp_uptime.status_code == 200
     assert resp_telemetria.status_code == 200
     assert resp_dlq.status_code == 202
@@ -194,7 +197,12 @@ def test_respostas_reais_validam_contra_support_api_yaml_e_refletem_breakers(
         format_checker=checker,
     )
     jsonschema.validate(
-        resp_status_degraded.json(),
+        resp_status_open.json(),
+        _schema_resposta(spec, "/api/v1/suporte/status", "get", "200"),
+        format_checker=checker,
+    )
+    jsonschema.validate(
+        resp_status_half_open.json(),
         _schema_resposta(spec, "/api/v1/suporte/status", "get", "200"),
         format_checker=checker,
     )
@@ -219,7 +227,12 @@ def test_respostas_reais_validam_contra_support_api_yaml_e_refletem_breakers(
         "weather",
         "guide",
     ]
-    assert resp_status_degraded.json()["status"] == "degraded"
+    assert resp_status_open.json()["status"] == "degraded"
+    assert resp_status_half_open.json()["status"] == "degraded"
+    assert any(
+        d == {"name": "weather", "state": "half_open"}
+        for d in resp_status_half_open.json()["dependencies"]
+    )
 
     uptime_json = resp_uptime.json()
     assert uptime_json["started_at"] == "2026-11-26T00:00:00Z"
@@ -246,13 +259,62 @@ def test_status_retorna_down_quando_app_state_nao_inicializado(
     app_sem_lifespan.include_router(suporte_router.router)
 
     client = TestClient(app_sem_lifespan)
-    resposta = client.get(
+    sem_breakers = client.get(
         "/api/v1/suporte/status",
         headers={"X-Support-Key": CHAVE_VALIDA},
     )
-    assert resposta.status_code == 200
-    assert resposta.json()["status"] == "down"
-    assert resposta.json()["dependencies"] == []
+    assert sem_breakers.status_code == 200
+    assert sem_breakers.json()["status"] == "down"
+    assert sem_breakers.json()["dependencies"] == []
+
+    app_sem_lifespan.state.circuit_breakers = {}
+    breakers_vazios = client.get(
+        "/api/v1/suporte/status",
+        headers={"X-Support-Key": CHAVE_VALIDA},
+    )
+    assert breakers_vazios.status_code == 200
+    assert breakers_vazios.json()["status"] == "down"
+    assert breakers_vazios.json()["dependencies"] == []
+
+
+def test_telemetria_contabiliza_errors_total_em_respostas_5xx(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SUPPORT_API_KEY", CHAVE_VALIDA)
+    monkeypatch.setenv("N8N_WEBHOOK_BASE_URL", "")
+    get_settings.cache_clear()
+
+    rotas_originais = list(app.router.routes)
+    router_erro = APIRouter(prefix="/api/v1/roteiros")
+
+    @router_erro.get("/erro-500-telemetria-teste")
+    async def _rota_erro_500() -> dict[str, str]:
+        raise RuntimeError("Erro simulado para validar errors_total")
+
+    app.include_router(router_erro)
+    app.openapi_schema = None
+    headers = {"X-Support-Key": CHAVE_VALIDA}
+
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            antes = client.get("/api/v1/suporte/telemetria", headers=headers)
+            assert antes.status_code == 200
+            erros_antes = antes.json()["errors_total"]
+            req_antes = antes.json()["requests_total"]
+
+            falha = client.get("/api/v1/roteiros/erro-500-telemetria-teste")
+            assert falha.status_code == 500
+
+            depois = client.get("/api/v1/suporte/telemetria", headers=headers)
+            assert depois.status_code == 200
+            erros_depois = depois.json()["errors_total"]
+            req_depois = depois.json()["requests_total"]
+    finally:
+        app.router.routes[:] = rotas_originais
+        app.openapi_schema = None
+
+    assert erros_depois == erros_antes + 1
+    assert req_depois >= req_antes + 2
 
 
 def test_cors_nao_autoriza_cabecalho_x_support_key() -> None:
