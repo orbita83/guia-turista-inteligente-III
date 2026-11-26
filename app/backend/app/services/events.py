@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import importlib
 import logging
+import os
 import re
+import ssl
 import threading
 import traceback
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import lru_cache
 from typing import Any
 from uuid import uuid4
 
@@ -35,6 +38,30 @@ _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+")
 
 _dlq_counter_lock = threading.Lock()
 _dlq_events_total = 0
+_ssl_context_lock = threading.Lock()
+
+
+@lru_cache(maxsize=4)
+def _criar_ssl_context_cacheado(
+    _ssl_cert_file: str,
+    _ssl_cert_dir: str,
+) -> ssl.SSLContext:
+    return httpx.create_ssl_context()
+
+
+def _obter_ssl_context_n8n(
+    ssl_cert_file: str,
+    ssl_cert_dir: str,
+) -> ssl.SSLContext:
+    """Obtém ``SSLContext`` reutilizável sem reparsear o bundle CA a cada envio."""
+    with _ssl_context_lock:
+        return _criar_ssl_context_cacheado(ssl_cert_file, ssl_cert_dir)
+
+
+def limpar_cache_ssl_n8n() -> None:
+    """Limpa o cache do contexto TLS do cliente dedicado ao n8n (uso em testes)."""
+    with _ssl_context_lock:
+        _criar_ssl_context_cacheado.cache_clear()
 
 
 def obter_total_eventos_dlq() -> int:
@@ -176,7 +203,15 @@ async def publicar_evento(webhook_path: str, payload: dict[str, Any]) -> None:
             event_id,
             trace_id,
         )
-        async with httpx.AsyncClient(timeout=settings.n8n_timeout_seconds) as client:
+        ssl_context = await run_in_threadpool(
+            _obter_ssl_context_n8n,
+            os.environ.get("SSL_CERT_FILE", ""),
+            os.environ.get("SSL_CERT_DIR", ""),
+        )
+        async with httpx.AsyncClient(
+            timeout=settings.n8n_timeout_seconds,
+            verify=ssl_context,
+        ) as client:
             response = await client.post(
                 url,
                 json=payload,
