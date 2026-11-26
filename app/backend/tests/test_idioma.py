@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from starlette.requests import Request
 
-from app.routers.chat import obter_idioma_requisicao, preparar_instrucao_idioma_chat
+from app.routers.chat import obter_idioma_requisicao
 from app.schemas.events import (
     DISPATCH_EVENT_EXAMPLE,
     DLQ_EVENT_EXAMPLE,
@@ -111,9 +111,10 @@ def test_router_chat_extrai_accept_language_e_repassa_ao_prompt() -> None:
         "headers": [(b"accept-language", b"en")],
     }
     request = Request(scope)
-    assert obter_idioma_requisicao(request) == "en"
+    idioma = obter_idioma_requisicao(request)
+    assert idioma == "en"
 
-    instrucao = preparar_instrucao_idioma_chat(request)
+    instrucao = montar_instrucao_idioma_chat(idioma)
     assert "código en" in instrucao
     assert "Parque Nacional de Sete Cidades" in instrucao
     assert "Cachoeira do Urubu" in instrucao
