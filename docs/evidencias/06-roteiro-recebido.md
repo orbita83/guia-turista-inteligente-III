@@ -1,108 +1,95 @@
-## Evidência 6 — Roteiro recebido (Pessoa 5 — Cássio)
+# Evidências de P5 — despacho de roteiro por e-mail
 
-**Evidência 1b — workflow ativo:** [01b-workflows-p5-n8n.png](01b-workflows-p5-n8n.png), captura fornecida por Cássio em 25/11/2026. Mostra o workflow completo `turismo-despachar-roteiro` e o indicador `Published`, sem segredos visíveis.
+## Estado atual
 
-**O que mostra:** e-mail real recebido pelo Gmail a partir do workflow
-`turismo-despachar-roteiro`, em inglês, com dois dias de atividades, link do mapa
-e a sequência `<script>alert(1)</script>` exibida como texto.
+O workflow `turismo-despachar-roteiro` foi publicado por Cássio. Os testes
+pela URL de produção receberam `202`; Cássio confirmou a entrega única do
+e-mail após repetição do evento e o alerta de falha correspondente no
+Telegram. A captura 01b comprova a publicação. Resta a revisão e o merge
+do PR #25; a issue #14 permanece aberta até essa conclusão.
 
-**Arquivo:** [06-roteiro-recebido.png](06-roteiro-recebido.png).
+## Arquivos
 
-**Data/hora:** 25/11/2026; e-mails em português e inglês recebidos às 16:11 e
-16:13, respectivamente (horário de Brasília).
+| Evidência | Arquivo | O que comprova |
+| --- | --- | --- |
+| 1b | [01b-workflows-p5-n8n.png](01b-workflows-p5-n8n.png) | Captura fornecida por Cássio em 25/11/2026: fluxo completo e indicador `Published`, sem segredos visíveis. |
+| 6 | [06-roteiro-recebido.png](06-roteiro-recebido.png) | E-mail real em inglês, com dois dias, mapa e texto HTML escapado; sem endereço de e-mail completo visível. |
 
-**Como reproduzir:** configure as credenciais `cred-gmail` (SMTP) e
-`cred-webhook-header` nos nós correspondentes, e o remetente no nó `Config`.
-Na instância publicada, envie um POST para
-`<N8N_WEBHOOK_BASE_URL>/turismo-despachar-roteiro`, com a base terminando em
-`/webhook` (URL de produção), `X-Webhook-Secret` e um evento válido de
-`dispatch-event.schema.json`. O modo de teste é útil para depurar um envio,
-mas não comprova a deduplicação persistente.
-Use seu próprio e-mail, um UUID novo em `event_id`, dois dias de atividades
-e `language` igual a `pt-BR` ou `en`. Confira o `202`, a execução até
-`Registrar entrega` e o recebimento na caixa de entrada.
+Ambos os arquivos usam formato PNG real. A conversão da Evidência 6 de
+JPEG para PNG preservou todos os pixels da captura original.
 
-**Resultados verificados nesta validação:**
+## Configuração e reprodução
 
-- Envio real em português e inglês: mensagens recebidas na caixa de entrada.
-- Conteúdo em inglês: `Day 1`, `Day 2` e `View on map`, preservando os nomes
-  próprios do roteiro.
-- Texto HTML de teste exibido literalmente no e-mail, sem interpretar a tag.
-- Pedido sem o cabeçalho de autenticação: `403 Forbidden`.
-- Destinatário inválido: rejeitado pela validação e encaminhado ao ramo da DLQ.
-- Chamada à DLQ: falhou com `404`, pois o webhook de produção
-  `turismo-dlq` não estava registrado/ativo no momento do teste. Portanto,
-  o alerta no Telegram não foi comprovado nessa execução inicial.
+1. Importe o [workflow](../n8n/turismo-despachar-roteiro.json) e selecione
+   `cred-webhook-header` (Header Auth com `X-Webhook-Secret`) nos nós
+   `Webhook` e `Enviar DLQ`, e `cred-gmail` (SMTP) em `Enviar email SMTP`.
+2. Para Gmail SMTP: host `smtp.gmail.com`, porta `465`, SSL/TLS ligado e
+   senha de aplicativo. Não use a senha comum da conta.
+3. No nó `Config`, preencha `fromEmail` com a conta remetente autenticada
+   e `environment` com `local`, `staging` ou `production`, conforme o ambiente.
+4. Publique o despacho. Para o alerta integrado, `turismo-dlq` também deve
+   estar ativo na mesma instância e aceitar a mesma credencial de webhook.
+5. Envie um POST para `<N8N_WEBHOOK_BASE_URL>/turismo-despachar-roteiro`.
+   A base deve terminar em `/webhook` (produção). Inclua `X-Webhook-Secret`
+   e um evento do [contrato de despacho](../../specs/003-integracao-eda-n8n/contracts/dispatch-event.schema.json),
+   sem `schema_version`, com seu e-mail, dois dias de atividades e
+   `language` igual a `pt-BR` ou `en`.
+6. Confira `202`, a execução até `Registrar entrega` e a caixa de entrada.
+   Reenvie exatamente o mesmo `event_id`, após a primeira execução terminar:
+   deve haver apenas um e-mail. Use um UUID novo para outro envio independente.
+7. Para repetir o cenário de falha registrado, envie um novo evento com
+   destinatário inválido e confira o alerta `InvalidRecipient` no Telegram,
+   correlacionando o `trace_id`. Sem a chave correta, a chamada deve ser recusada.
 
-**Observações:** a captura é de uma entrega real, sem endereço de e-mail
-completo ou segredo visível. Os dados do roteiro são fictícios para teste.
-Na revisão do PR #25, Mailson informou que a DLQ foi ativada em produção
-(PR #26). A confirmação anterior de conclusão pelo responsável não
-substitui a prova do reteste integrado: publicação do despacho, descarte
-de evento repetido e alerta no Telegram devem ser registrados com
-evidências antes da conclusão técnica da entrega.
-O JSON versionado é portável e sanitizado, com credenciais e remetente como
-marcadores e `active: false` para importação; esse campo não descreve o
-estado atual da instância da equipe. WhatsApp (P2) ficou fora da entrega
-combinada de e-mail em `pt-BR` e `en`.
+O `.env` da raiz fornece URL e segredo ao backend ou ao disparo HTTP local.
+O workflow no n8n Cloud usa as credenciais e o nó `Config`; ele não lê o
+`.env` do repositório. A URL de teste permite depurar uma execução, mas não
+comprova deduplicação persistente.
 
-Este arquivo é a contribuição de P5 para a Evidência 6. O README/índice
-compartilhado pertence à #22 (Alisson); esta entrega não cria nem substitui
-seu template. A seção pode ser incorporada ou vinculada pelo responsável
-quando a #22 for consolidada.
+## Resultados registrados em 25/11/2026
 
+| Cenário | Resultado e origem da confirmação |
+| --- | --- |
+| Português e inglês | Mensagens recebidas às 16:11 e 16:13 (Brasília), respectivamente, observadas na caixa de entrada. |
+| Conteúdo em inglês | `Day 1`, `Day 2`, `View on map` e nomes próprios preservados, observados no e-mail. |
+| Escape HTML | A sequência `<script>alert(1)</script>` aparece como texto no e-mail. |
+| Pedido sem autenticação | `403 Forbidden`, observado na resposta HTTP. |
+| Despacho de produção | Envio válido, repetição do mesmo evento e destinatário inválido retornaram `202`, observados nas respostas HTTP. |
+| Deduplicação de produção | Cássio confirmou exatamente um e-mail com assunto exclusivo "Validação final de duplicidade T0013" após os dois pedidos com o mesmo evento. |
+| DLQ pelo despacho publicado | Cássio confirmou o alerta `InvalidRecipient` no Telegram com rastreio correspondente ao evento de falha. Não foi capturada nova imagem do grupo pelo agente. |
 
-### Reteste do receptor da DLQ com o `.env` configurado
+O `202` comprova aceitação do pedido, não entrega. A entrega única e o
+alerta em produção foram confirmados por Cássio, correlacionados aos
+pedidos abaixo, e não são apresentados como inspeção direta do agente no Telegram.
 
-Em 25/11/2026, o evento gerado pelo nó `Montar DLQ`, marcado com
-`is_test: true` e sem dados pessoais, foi enviado diretamente ao receptor
-de produção `/webhook/turismo-dlq`, usando o segredo local sem exibi-lo.
+- Evento válido e sua repetição: `d0b75fdd-feb0-4583-bbb9-cdeb10272953`.
+- Evento de falha integrado: `f6a0c061-1b8a-4dc1-a2ad-b69f35bd5335`.
+- Rastreio do alerta integrado: `818d4ae8bd9c4421ac9e24b802cf1a9f`.
+- Reteste direto anterior do receptor da DLQ: `202`, evento
+  `2fcaeee3-c961-4432-b5aa-06adb7de96ba`, rastreio
+  `b19e4bdf23ec4950b30353e23dd21b71`, `is_test: true`; alerta também
+  confirmado por Cássio.
 
-- Resposta: `HTTP 202`, corpo `{"message":"Workflow was started"}`.
-- `event_id`: `2fcaeee3-c961-4432-b5aa-06adb7de96ba`.
-- `trace_id`: `b19e4bdf23ec4950b30353e23dd21b71`.
-- Tipo de erro do evento: `InvalidRecipient`.
+Os `404` dos testes iniciais ocorreram antes de os respectivos webhooks
+estarem ativos em produção. São histórico do diagnóstico, não pendência
+atual: o reteste integrado acima ocorreu após a publicação do despacho.
 
-A tentativa anterior de entrar pelo dispatcher de produção
-`/webhook/turismo-despachar-roteiro` retornou `404` com a mensagem de webhook
-não registrado. Portanto, este reteste confirma que a URL e o segredo
-locais são aceitos pelo receptor da DLQ; não comprova a ativação do
-despacho, sua deduplicação ou a entrega do alerta no Telegram. A execução
-integrada continua pendente. O navegador não pôde ser controlado nesta
-rodada porque a ferramenta não conseguiu confirmar a URL atual com segurança.
+## Escopo, limites e integração com a documentação da equipe
 
-**Confirmação do alerta:** após esse POST, Cássio conferiu o grupo técnico
-do Telegram e confirmou no chat o recebimento do alerta `[TESTE]` de
-`InvalidRecipient` com `trace_id` começando por `b19e4bdf`, correspondente
-ao evento acima. A entrega no Telegram foi confirmada pelo responsável;
-a ferramenta não capturou uma nova imagem do grupo. Isso conclui o reteste
-direto do receptor da DLQ, mantendo pendentes a execução integrada pelo
-workflow de despacho publicado e a deduplicação em produção.
-
-
-### Reteste pelo dispatcher publicado
-
-Após Cássio publicar o workflow, em 25/11/2026 foram enviados três
-pedidos à URL de produção do despacho, usando o segredo local:
-
-- envio valido: `HTTP 202`.
-- mesmo evento reenviado: `HTTP 202`.
-- falha pelo dispatcher publicado: `HTTP 202`.
-
-O envio válido e a repetição usaram o mesmo `event_id`: `d0b75fdd-feb0-4583-bbb9-cdeb10272953`.
-O teste de falha usou destinatário inválido, `event_id`
-`f6a0c061-1b8a-4dc1-a2ad-b69f35bd5335` e `trace_id`
-`818d4ae8bd9c4421ac9e24b802cf1a9f`.
-
-Essas respostas comprovam o recebimento pelo dispatcher de produção,
-mas não são suficientes, isoladamente, para comprovar ausência de
-e-mail duplicado ou entrega do alerta no Telegram. Cássio confirmou no chat o recebimento de exatamente um e-mail
-com assunto "Validação final de duplicidade T0013" após os dois pedidos
-com o mesmo `event_id`, e o alerta `InvalidRecipient` no Telegram com
-rastreio começando por `818d4ae8`. A confirmação das entregas foi feita
-pelo responsável, correlacionada aos eventos desta execução; não foi
-capturada nova imagem do grupo pela ferramenta.
-
-O reteste integrado e a duplicidade em produção ficam registrados como
-concluídos com essa atribuição. A captura 01b do workflow ativo foi anexada. Resta concluir a
-revisão/merge do PR #25.
+- Entrega P0: e-mail em `pt-BR` e `en`. WhatsApp (P2) e idiomas adicionais
+  foram cortados conforme registro na issue; o ramo de WhatsApp informa
+  que o canal não está habilitado, sem simular entrega.
+- O cenário de falha efetivamente executado usa destinatário barrado pela
+  validação. Não é prova de indisponibilidade ou rejeição pelo servidor SMTP;
+  esses erros têm um ramo próprio no workflow.
+- A deduplicação mantém os últimos 50 eventos entregues, usa static data
+  somente após sucesso e exige workflow publicado. Não há garantia atômica
+  para chamadas simultâneas nem para falha após o provedor aceitar o e-mail.
+- O JSON versionado é portável e sanitizado: credenciais e remetente são
+  marcadores, `pinData` é vazio e `active: false` evita ativação na importação.
+  Isso não contradiz a instância publicada mostrada na Evidência 1b.
+- Testes locais de regressão:
+  `node --test docs/n8n/turismo-despachar-roteiro.test.mjs` (19 testes).
+- Este arquivo é a contribuição de P5. O README/índice compartilhado pertence
+  à #22 (Alisson), que pode incorporar ou vincular esta seção; este PR não
+  cria nem substitui o template.
