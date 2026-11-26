@@ -48,3 +48,23 @@ Este arquivo é a contribuição de P5 para a Evidência 6. O README/índice
 compartilhado pertence à #22 (Alisson); esta entrega não cria nem substitui
 seu template. A seção pode ser incorporada ou vinculada pelo responsável
 quando a #22 for consolidada.
+
+
+### Reteste do receptor da DLQ com o `.env` configurado
+
+Em 25/11/2026, o evento gerado pelo nó `Montar DLQ`, marcado com
+`is_test: true` e sem dados pessoais, foi enviado diretamente ao receptor
+de produção `/webhook/turismo-dlq`, usando o segredo local sem exibi-lo.
+
+- Resposta: `HTTP 202`, corpo `{"message":"Workflow was started"}`.
+- `event_id`: `2fcaeee3-c961-4432-b5aa-06adb7de96ba`.
+- `trace_id`: `b19e4bdf23ec4950b30353e23dd21b71`.
+- Tipo de erro do evento: `InvalidRecipient`.
+
+A tentativa anterior de entrar pelo dispatcher de produção
+`/webhook/turismo-despachar-roteiro` retornou `404` com a mensagem de webhook
+não registrado. Portanto, este reteste confirma que a URL e o segredo
+locais são aceitos pelo receptor da DLQ; não comprova a ativação do
+despacho, sua deduplicação ou a entrega do alerta no Telegram. A execução
+integrada continua pendente. O navegador não pôde ser controlado nesta
+rodada porque a ferramenta não conseguiu confirmar a URL atual com segurança.
