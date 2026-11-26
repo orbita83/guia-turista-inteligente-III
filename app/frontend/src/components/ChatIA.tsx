@@ -3,7 +3,7 @@
 import type { ComponentType, FormEvent, KeyboardEvent } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 
-import { enviarMensagem } from '../services/chatApi';
+import { ChatApiError, enviarMensagem } from '../services/chatApi';
 import type { Itinerary, MensagemChat } from '../types/chat';
 import {
   MAX_CHAT_LOCATION_LENGTH,
@@ -15,10 +15,17 @@ import { ErroAmigavel } from './ErroAmigavel';
 
 const ORIGEM_PADRAO = 'Teresina - PI';
 const DESTINO_PADRAO = 'Piripiri - PI';
+const MENSAGEM_ERRO_PADRAO_CHAT =
+  'Algo deu errado ao conversar com o assistente. Não foi possível concluir sua solicitação agora.';
 
 interface ErroChatEstado {
   mensagem: string;
   traceId?: string;
+}
+
+export interface ChatIAProps {
+  /** Permite sobrescrever a detecção automática de disponibilidade do EnvioRoteiro em testes. */
+  envioRoteiroDisponivel?: boolean;
 }
 
 const EnvioRoteiroJSX = EnvioRoteiro as unknown as ComponentType<{
@@ -28,6 +35,7 @@ const EnvioRoteiroJSX = EnvioRoteiro as unknown as ComponentType<{
 
 const ErroAmigavelJSX = ErroAmigavel as unknown as ComponentType<{
   traceId?: string;
+  mensagem?: string;
   onTentarNovamente?: () => void;
 }>;
 
@@ -93,7 +101,7 @@ function extrairTraceIdDeExcecao(err: unknown): string | undefined {
   return undefined;
 }
 
-export function ChatIA() {
+export function ChatIA({ envioRoteiroDisponivel: envioRoteiroProp }: ChatIAProps = {}) {
   const idBase = useId();
   const inputMensagemId = `${idBase}-mensagem`;
   const inputOrigemId = `${idBase}-origem`;
@@ -118,10 +126,38 @@ export function ChatIA() {
   const deveFocarAposEnvioRef = useRef(false);
 
   useEffect(() => {
-    const iniciais = lerOrigemDestinoFormularioPrincipal();
-    setOrigin(iniciais.origin);
-    setDestination(iniciais.destination);
-  }, []);
+    const sincronizarComFormulario = () => {
+      const doFormulario = lerOrigemDestinoFormularioPrincipal();
+      if (!origemEditadaManual) {
+        setOrigin(doFormulario.origin);
+      }
+      if (!destinoEditadoManual) {
+        setDestination(doFormulario.destination);
+      }
+    };
+
+    sincronizarComFormulario();
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const seletores = ['#origem_cidade', '#origem_uf', '#destino_cidade', '#destino_uf'];
+    const elementos = seletores
+      .map((seletor) => document.querySelector<HTMLElement>(seletor))
+      .filter((el): el is HTMLElement => el !== null);
+
+    for (const el of elementos) {
+      el.addEventListener('input', sincronizarComFormulario);
+      el.addEventListener('change', sincronizarComFormulario);
+    }
+
+    return () => {
+      for (const el of elementos) {
+        el.removeEventListener('input', sincronizarComFormulario);
+        el.removeEventListener('change', sincronizarComFormulario);
+      }
+    };
+  }, [origemEditadaManual, destinoEditadoManual]);
 
   useEffect(() => {
     if (!isSending && deveFocarAposEnvioRef.current) {
@@ -136,7 +172,8 @@ export function ChatIA() {
     };
   }, []);
 
-  const limiteMensagensAtingido = messages.length >= MAX_CHAT_MESSAGES;
+  // Garante sempre vaga para o par [usuário, assistente] dentro do teto de 12 mensagens.
+  const limiteMensagensAtingido = messages.length >= MAX_CHAT_MESSAGES - 1;
   const limiteCaracteresExcedido = inputText.length > MAX_CHAT_MESSAGE_LENGTH;
   const textoLimpo = inputText.trim();
   const envioDesabilitado =
@@ -148,7 +185,10 @@ export function ChatIA() {
     destination.trim().length === 0;
 
   // Enquanto EnvioRoteiro (P5, #15) for o stub que retorna null do PR 0, o botão fica desabilitado com title="Em breve".
-  const envioRoteiroDisponivel = isComponenteImplementado(EnvioRoteiro);
+  const envioRoteiroDisponivel =
+    typeof envioRoteiroProp === 'boolean'
+      ? envioRoteiroProp
+      : isComponenteImplementado(EnvioRoteiro);
   const erroAmigavelImplementado = isComponenteImplementado(ErroAmigavel);
 
   async function submeterMensagem(textoParaEnviar: string) {
@@ -156,7 +196,7 @@ export function ChatIA() {
     if (
       !conteudo ||
       isSending ||
-      messages.length >= MAX_CHAT_MESSAGES ||
+      messages.length >= MAX_CHAT_MESSAGES - 1 ||
       conteudo.length > MAX_CHAT_MESSAGE_LENGTH
     ) {
       return;
@@ -217,9 +257,10 @@ export function ChatIA() {
       setMessages(historicoAnterior);
       setInputText(conteudo);
       const traceId = extrairTraceIdDeExcecao(err);
+      const mensagemAmigavel =
+        err instanceof ChatApiError && err.message.trim() ? err.message : MENSAGEM_ERRO_PADRAO_CHAT;
       setErro({
-        mensagem:
-          'Algo deu errado ao conversar com o assistente. Não foi possível concluir sua solicitação agora.',
+        mensagem: mensagemAmigavel,
         traceId,
       });
     } finally {
@@ -359,7 +400,11 @@ export function ChatIA() {
 
       {erro && (
         <div className="chat-ia-error-wrapper">
-          <ErroAmigavelJSX traceId={erro.traceId} onTentarNovamente={handleTentarNovamente} />
+          <ErroAmigavelJSX
+            traceId={erro.traceId}
+            mensagem={erro.mensagem}
+            onTentarNovamente={handleTentarNovamente}
+          />
           {!erroAmigavelImplementado && (
             <div className="chat-ia-error" role="alert">
               <p className="chat-ia-error-text">{erro.mensagem}</p>

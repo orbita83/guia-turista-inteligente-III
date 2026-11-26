@@ -146,21 +146,30 @@ describe('ChatIA e chatApi (Issue #12 · T0016)', () => {
 
   it('mostra erro amigável com trace_id e sem dados técnicos (stack/latência) quando o backend falha', async () => {
     const user = userEvent.setup();
+    let tentativa = 0;
 
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () =>
-        Response.json(
-          {
-            detail: 'Traceback (most recent call last): RuntimeError em guide.py latency=420ms',
-            trace_id: 'trace-uuid-987654',
-          },
-          {
-            status: 500,
-            headers: { 'X-Request-ID': 'header-req-id-123' },
-          },
-        ),
-      ),
+      vi.fn(async () => {
+        tentativa += 1;
+        if (tentativa === 1) {
+          return Response.json(
+            {
+              detail: 'Traceback (most recent call last): RuntimeError em guide.py latency=420ms',
+              trace_id: 'trace-uuid-987654',
+            },
+            {
+              status: 500,
+              headers: { 'X-Request-ID': 'header-req-id-123' },
+            },
+          );
+        }
+        return Response.json({
+          reply: 'Resposta recuperada após tentar novamente!',
+          done: false,
+          itinerary: null,
+        });
+      }),
     );
 
     render(<ChatIA />);
@@ -168,7 +177,7 @@ describe('ChatIA e chatApi (Issue #12 · T0016)', () => {
     await user.type(campoMensagem, 'Teste de falha{Enter}');
 
     const alerta = await screen.findByRole('alert');
-    expect(alerta).toHaveTextContent(/Algo deu errado ao conversar com o assistente/i);
+    expect(alerta).toHaveTextContent(/Não foi possível conversar com o assistente agora/i);
     expect(alerta).toHaveTextContent('trace-uuid-987654');
     expect(alerta).not.toHaveTextContent(/Traceback/i);
     expect(alerta).not.toHaveTextContent(/RuntimeError/i);
@@ -180,6 +189,111 @@ describe('ChatIA e chatApi (Issue #12 · T0016)', () => {
     // A mensagem que falhou é restaurada no input e não consome o limite de 12 mensagens como órfã
     expect(campoMensagem).toHaveValue('Teste de falha');
     expect(screen.getByText('0/12 mensagens')).toBeInTheDocument();
+
+    // Reenvia com Enter a mensagem restaurada e recebe sucesso na 2ª tentativa
+    await user.keyboard('{Enter}');
+    expect(
+      await screen.findByText('Resposta recuperada após tentar novamente!'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('2/12 mensagens')).toBeInTheDocument();
+  });
+
+  it('diferencia mensagens amigáveis para 401, 422, 429 e resposta 200 com JSON inválido e permite Nova conversa', async () => {
+    const user = userEvent.setup();
+
+    // Testa enviarMensagem com status 401, 422 e 200 não-JSON
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json({ detail: 'Unauthorized', trace_id: 'tr-401' }, { status: 401 }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({ detail: 'Unprocessable', trace_id: 'tr-422' }, { status: 422 }),
+      )
+      .mockResolvedValueOnce(
+        new Response('<html>bad gateway</html>', {
+          status: 200,
+          headers: { 'X-Request-ID': 'tr-invalid-json' },
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      enviarMensagem([{ role: 'user', content: 'Oi' }], 'Teresina - PI', 'Piripiri - PI'),
+    ).rejects.toMatchObject({
+      status: 401,
+      trace_id: 'tr-401',
+      message: expect.stringMatching(/sessão expirou/i),
+    });
+
+    await expect(
+      enviarMensagem([{ role: 'user', content: 'Oi' }], 'Teresina - PI', 'Piripiri - PI'),
+    ).rejects.toMatchObject({
+      status: 422,
+      trace_id: 'tr-422',
+      message: expect.stringMatching(/limites da mensagem/i),
+    });
+
+    await expect(
+      enviarMensagem([{ role: 'user', content: 'Oi' }], 'Teresina - PI', 'Piripiri - PI'),
+    ).rejects.toMatchObject({
+      status: 200,
+      trace_id: 'tr-invalid-json',
+    });
+
+    // Testa botão Nova conversa após concluir um roteiro e sincronização com #origem_cidade/#destino_cidade
+    const inputOrigemExterno = document.createElement('input');
+    inputOrigemExterno.id = 'origem_cidade';
+    inputOrigemExterno.value = 'Recife';
+    const selectUfOrigemExterno = document.createElement('select');
+    selectUfOrigemExterno.id = 'origem_uf';
+    const optPe = document.createElement('option');
+    optPe.value = 'PE';
+    optPe.selected = true;
+    selectUfOrigemExterno.appendChild(optPe);
+    document.body.append(inputOrigemExterno, selectUfOrigemExterno);
+
+    try {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () =>
+          Response.json({
+            reply: 'Roteiro concluído!',
+            done: true,
+            itinerary: ROTEIRO_EXEMPLO,
+          }),
+        ),
+      );
+
+      render(<ChatIA envioRoteiroDisponivel />);
+      expect(screen.getByLabelText('Origem do roteiro no chat')).toHaveValue('Recife - PE');
+
+      // Atualiza input externo em tempo real e dispara evento input
+      inputOrigemExterno.value = 'Olinda';
+      fireEvent.input(inputOrigemExterno);
+      expect(screen.getByLabelText('Origem do roteiro no chat')).toHaveValue('Olinda - PE');
+
+      const campoMensagem = screen.getByLabelText('Mensagem para o assistente');
+      await user.type(campoMensagem, 'Concluir roteiro{Enter}');
+
+      expect(
+        await screen.findByRole('heading', { name: 'Roteiro Teresina a Piripiri' }),
+      ).toBeInTheDocument();
+      const botaoEnvioHabilitado = screen.getByRole('button', {
+        name: 'Enviar por e-mail / WhatsApp',
+      });
+      expect(botaoEnvioHabilitado).toBeEnabled();
+      await user.click(botaoEnvioHabilitado);
+
+      await user.click(screen.getByRole('button', { name: 'Nova conversa' }));
+      expect(
+        screen.queryByRole('heading', { name: 'Roteiro Teresina a Piripiri' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByText('0/12 mensagens')).toBeInTheDocument();
+    } finally {
+      inputOrigemExterno.remove();
+      selectUfOrigemExterno.remove();
+    }
   });
 
   it('extrai trace_id do cabeçalho X-Request-ID em ChatApiError quando o corpo não traz trace_id', async () => {

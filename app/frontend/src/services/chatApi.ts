@@ -148,7 +148,7 @@ function extrairTraceIdDeErro(payload: unknown, response: Response): string | un
   return reqId.available ? reqId.value : undefined;
 }
 
-function mensagemAmigavelPorStatus(status: number): string {
+export function mensagemAmigavelPorStatus(status: number): string {
   if (status === 401) {
     return 'Sua sessão expirou ou não está autenticada. Entre novamente para conversar com o assistente.';
   }
@@ -176,8 +176,29 @@ export async function enviarMensagem(
 
   // Se `request` de `./api` foi substituído por um spy/mock direto em testes, delega para ele.
   if ('mock' in request) {
-    const raw = await request<unknown>('/chat/mensagens', init);
-    return parseRespostaChat(raw);
+    try {
+      const raw = await request<unknown>('/chat/mensagens', init);
+      return parseRespostaChat(raw);
+    } catch (err: unknown) {
+      if (err instanceof ChatApiError) {
+        throw err;
+      }
+      if (err instanceof ApiError) {
+        const traceId =
+          typeof (err as unknown as Record<string, unknown>).trace_id === 'string'
+            ? String((err as unknown as Record<string, unknown>).trace_id)
+            : typeof (err as unknown as Record<string, unknown>).traceId === 'string'
+              ? String((err as unknown as Record<string, unknown>).traceId)
+              : undefined;
+        throw new ChatApiError(
+          mensagemAmigavelPorStatus(err.status),
+          err.status,
+          traceId,
+          err.fieldErrors,
+        );
+      }
+      throw err;
+    }
   }
 
   const response = await fetch(`${API_BASE_URL}/chat/mensagens`, {
