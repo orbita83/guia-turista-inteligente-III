@@ -1,2 +1,14 @@
-/** Cliente HTTP de postos ANP — implementado por P3 na issue #10 (T0015). */
-export {};
+import type { CoordenadaGPS } from '../types/domain';
+import type { ResultadoPostosAnp } from '../types/postos';
+import { request } from './api';
+
+export function buscarPostosAoLongoDaRota(
+  geometria: CoordenadaGPS[],
+  signal: AbortSignal,
+): Promise<ResultadoPostosAnp> {
+  return request<ResultadoPostosAnp>('/postos/ao-longo-da-rota', {
+    method: 'POST',
+    body: JSON.stringify({ geometria }),
+    signal,
+  });
+}

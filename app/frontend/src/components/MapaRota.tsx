@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
+import { buscarPostosAoLongoDaRota } from '../services/postosApi';
 import { geometriaValida } from '../services/routeCalculator';
 
 import type {
@@ -9,6 +10,7 @@ import type {
   TipoPropulsao,
   Viagem,
 } from '../types/domain';
+import type { PostoAnp } from '../types/postos';
 
 export interface MapaRotaProps {
   viagem: Viagem;
@@ -29,6 +31,61 @@ function coordenadaValida([latitude, longitude]: CoordenadaGPS): boolean {
   );
 }
 
+interface CamadasMapa {
+  mapa: L.Map;
+  rota: L.LayerGroup;
+  paradas: L.LayerGroup;
+  postos: L.LayerGroup;
+}
+
+type ConsultaPostos =
+  | { geometria: CoordenadaGPS[]; status: 'sucesso'; postos: PostoAnp[] }
+  | { geometria: CoordenadaGPS[]; status: 'erro' };
+
+const POSTOS_VAZIOS: PostoAnp[] = [];
+const ROTULOS_COMBUSTIVEIS: Partial<Record<string, string>> = {
+  gasolina_comum: 'Gasolina comum',
+  gasolina_aditivada: 'Gasolina aditivada',
+  etanol: 'Etanol',
+  diesel_s10: 'Diesel S10',
+  diesel_s10_aditivado: 'Diesel S10 aditivado',
+  diesel_s500: 'Diesel S500',
+  gnv: 'GNV',
+};
+
+function criarPopupPosto(posto: PostoAnp): HTMLElement {
+  const campos = document.createElement('dl');
+  campos.className = 'posto-anp-detalhes';
+
+  const valores = [
+    ['Razão social', posto.legal_name],
+    ['CNPJ', posto.cnpj],
+    [
+      'Avaliação',
+      posto.rating === null ? 'Sem avaliação' : posto.rating.toLocaleString('pt-BR') + ' / 5',
+    ],
+    [
+      'Autorização na ANP',
+      `Autorizado há ${posto.authorization_years} ${posto.authorization_years === 1 ? 'ano' : 'anos'}`,
+    ],
+    [
+      'Combustíveis',
+      posto.fuels
+        .map((fuel) => ROTULOS_COMBUSTIVEIS[fuel] ?? fuel.replaceAll('_', ' '))
+        .join(', ') || 'Não informados',
+    ],
+  ];
+
+  for (const [rotulo, valor] of valores) {
+    const termo = document.createElement('dt');
+    const descricao = document.createElement('dd');
+    termo.textContent = rotulo;
+    descricao.textContent = valor;
+    campos.append(termo, descricao);
+  }
+  return campos;
+}
+
 export function MapaRota({
   viagem,
   formParams,
@@ -39,6 +96,8 @@ export function MapaRota({
 }: MapaRotaProps) {
   const titleId = useId();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const camadasRef = useRef<CamadasMapa | null>(null);
+  const [consultaPostos, setConsultaPostos] = useState<ConsultaPostos | null>(null);
   const rotas = useMemo(
     () => (viagem.rotas ?? []).filter((rota) => geometriaValida(rota.coordenadas)),
     [viagem.rotas],
@@ -48,6 +107,23 @@ export function MapaRota({
   const alternativa = rotas.length ? undefined : alternativas[alternativaAtiva ?? -1];
   const geometria: CoordenadaGPS[] | undefined =
     rotaAtiva?.coordenadas ?? alternativa?.geometria ?? viagem.percurso.geometria;
+  // A mesma rota pode chegar em um array novo ao atualizar outros dados da viagem.
+  const chaveGeometria = geometriaValida(geometria) ? JSON.stringify(geometria) : null;
+  const geometriaMapa = useMemo(
+    () => (chaveGeometria ? (JSON.parse(chaveGeometria) as CoordenadaGPS[]) : null),
+    [chaveGeometria],
+  );
+  const temGeometria = geometriaMapa !== null;
+  const consultaAtiva = consultaPostos?.geometria === geometriaMapa ? consultaPostos : null;
+  const postos = useMemo(
+    () =>
+      consultaAtiva?.status === 'sucesso'
+        ? consultaAtiva.postos.filter((posto) =>
+            coordenadaValida([posto.latitude, posto.longitude]),
+          )
+        : POSTOS_VAZIOS,
+    [consultaAtiva],
+  );
   const elevation = rotaAtiva
     ? rotaAtiva.perfilElevacao
     : alternativa
@@ -205,29 +281,55 @@ export function MapaRota({
   const polygonPoints = hasElevationPoints ? `10,75 ${chartPoints} 490,75` : '';
 
   useEffect(() => {
-    if (!mapContainerRef.current || !geometriaValida(geometria) || !geometria) return;
-    const map = L.map(mapContainerRef.current, { scrollWheelZoom: false });
+    if (!mapContainerRef.current || !temGeometria) return;
+
+    const mapa = L.map(mapContainerRef.current, { scrollWheelZoom: false });
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors',
       maxZoom: 19,
-    }).addTo(map);
-    const line = L.polyline(geometria, { color: '#0284c7', weight: 5 }).addTo(map);
-    L.circleMarker(geometria[0], {
+    }).addTo(mapa);
+    camadasRef.current = {
+      mapa,
+      rota: L.layerGroup().addTo(mapa),
+      paradas: L.layerGroup().addTo(mapa),
+      postos: L.layerGroup().addTo(mapa),
+    };
+    return () => {
+      mapa.remove();
+      camadasRef.current = null;
+    };
+  }, [temGeometria]);
+
+  useEffect(() => {
+    const camadas = camadasRef.current;
+    if (!camadas || !geometriaMapa) return;
+
+    camadas.rota.clearLayers();
+    const line = L.polyline(geometriaMapa, { color: '#0284c7', weight: 5 }).addTo(camadas.rota);
+    L.circleMarker(geometriaMapa[0], {
       radius: 8,
       color: '#15803d',
       fillColor: '#16a34a',
       fillOpacity: 1,
     })
       .bindTooltip('Origem')
-      .addTo(map);
-    L.circleMarker(geometria[geometria.length - 1], {
+      .addTo(camadas.rota);
+    L.circleMarker(geometriaMapa[geometriaMapa.length - 1], {
       radius: 8,
       color: '#b91c1c',
       fillColor: '#dc2626',
       fillOpacity: 1,
     })
       .bindTooltip('Destino')
-      .addTo(map);
+      .addTo(camadas.rota);
+    camadas.mapa.fitBounds(line.getBounds(), { padding: [30, 30] });
+  }, [geometriaMapa]);
+
+  useEffect(() => {
+    const camada = camadasRef.current?.paradas;
+    if (!camada) return;
+
+    camada.clearLayers();
     for (const [index, parada] of (paradasAtivas ?? []).entries()) {
       if (!coordenadaValida(parada.coordenadas)) continue;
       const tooltip = document.createElement('span');
@@ -241,13 +343,55 @@ export function MapaRota({
         }),
       })
         .bindTooltip(tooltip)
-        .addTo(map);
+        .addTo(camada);
     }
-    map.fitBounds(line.getBounds(), { padding: [30, 30] });
-    return () => {
-      map.remove();
-    };
-  }, [geometria, paradasAtivas]);
+  }, [paradasAtivas, temGeometria]);
+
+  useEffect(() => {
+    if (!geometriaMapa) return;
+
+    const controller = new AbortController();
+    void buscarPostosAoLongoDaRota(geometriaMapa, controller.signal).then(
+      ({ postos: encontrados }) => {
+        if (!controller.signal.aborted) {
+          setConsultaPostos({ geometria: geometriaMapa, status: 'sucesso', postos: encontrados });
+        }
+      },
+      () => {
+        if (!controller.signal.aborted) {
+          setConsultaPostos({ geometria: geometriaMapa, status: 'erro' });
+        }
+      },
+    );
+    return () => controller.abort();
+  }, [geometriaMapa]);
+
+  useEffect(() => {
+    const camada = camadasRef.current?.postos;
+    if (!camada) return;
+
+    camada.clearLayers();
+    const icon = L.divIcon({
+      className: 'posto-anp-marker',
+      html: false,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -16],
+    });
+    for (const posto of postos) {
+      const alt = `Posto ANP: ${posto.legal_name}`;
+      const marcador = L.marker([posto.latitude, posto.longitude], {
+        keyboard: true,
+        title: posto.legal_name,
+        alt,
+        icon,
+      })
+        .bindPopup(criarPopupPosto(posto), { className: 'posto-anp-popup', maxWidth: 280 })
+        .addTo(camada);
+      // O Leaflet só aplica alt a ícones do tipo IMG.
+      marcador.getElement()?.setAttribute('aria-label', alt);
+    }
+  }, [postos, temGeometria]);
 
   return (
     <section className="mapa-card" aria-labelledby={titleId}>
@@ -397,7 +541,7 @@ export function MapaRota({
         </div>
       </div>
 
-      {geometriaValida(geometria) && geometria ? (
+      {temGeometria ? (
         <>
           {(rotas.length > 1 || alternativas.length > 0) && (
             <section
@@ -533,7 +677,7 @@ export function MapaRota({
             <div
               ref={mapContainerRef}
               className="leaflet-map-root"
-              role="img"
+              role="region"
               aria-label={`Traçado de ${viagem.origem} até ${viagem.destino}`}
             />
             <div className="map-floating-legend" aria-label="Legenda do mapa">
@@ -551,8 +695,23 @@ export function MapaRota({
                   Paradas
                 </span>
               ) : null}
+              {postos.length > 0 && (
+                <span className="legend-item">
+                  <i className="posto-anp-legenda" aria-hidden="true" />
+                  Postos ANP
+                </span>
+              )}
             </div>
           </div>
+          {(!consultaAtiva || consultaAtiva.status === 'erro' || postos.length === 0) && (
+            <p className="postos-anp-estado" role="status">
+              {!consultaAtiva
+                ? 'Carregando postos ANP…'
+                : consultaAtiva.status === 'erro'
+                  ? 'Não foi possível carregar os postos ANP para esta rota.'
+                  : 'Nenhum posto no trecho'}
+            </p>
+          )}
           <div role="region" aria-label="Descrição textual da rota">
             <p>
               {rotaAtiva?.titulo ??

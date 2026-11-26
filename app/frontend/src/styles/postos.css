@@ -1,1 +1,75 @@
-/* Estilos de postos ANP no mapa — implementados por P3 na issue #10 (T0015). */
+.posto-anp-marker {
+  display: grid;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #0f766e;
+  color: white;
+  box-shadow: 0 2px 6px #0f172a70;
+}
+
+.posto-anp-marker::before {
+  content: '⛽︎';
+  font-size: 18px;
+  line-height: 1;
+}
+
+.posto-anp-marker:focus-visible {
+  outline: 3px solid #0f172a;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px white;
+}
+
+.posto-anp-legenda {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #0f766e;
+}
+
+.posto-anp-popup .leaflet-popup-content-wrapper,
+.posto-anp-popup .leaflet-popup-tip {
+  background: var(--bg-card);
+  color: var(--text-main);
+}
+
+.posto-anp-popup .leaflet-popup-content {
+  margin: 16px 24px 16px 18px;
+}
+
+.posto-anp-popup a.leaflet-popup-close-button {
+  color: var(--text-secondary);
+}
+
+.posto-anp-detalhes {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.posto-anp-detalhes dt {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.posto-anp-detalhes dt:not(:first-child) {
+  margin-top: 6px;
+}
+
+.posto-anp-detalhes dd {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 13px;
+}
+
+.posto-anp-detalhes dd:first-of-type {
+  font-weight: 700;
+}
+
+.postos-anp-estado {
+  margin: 8px 0 12px;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
