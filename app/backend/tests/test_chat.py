@@ -16,7 +16,12 @@ from fastapi.testclient import TestClient
 from app.core.circuit_breaker import CircuitState
 from app.core.config import REPOSITORY_ROOT, Settings, get_settings
 from app.main import app
-from app.routers.chat import MAX_CHAT_MESSAGES_PER_HOUR, limpar_rate_limit_chat
+from app.routers.chat import (
+    _HISTORICO_MENSAGENS_POR_SESSAO,
+    CHAT_RATE_LIMIT_WINDOW_SECONDS,
+    MAX_CHAT_MESSAGES_PER_HOUR,
+    limpar_rate_limit_chat,
+)
 from app.schemas.events import DISPATCH_EVENT_EXAMPLE, ITINERARY_EXAMPLE, Itinerary
 from app.services import guide
 
@@ -566,3 +571,45 @@ def test_chat_aplica_limite_de_20_mensagens_por_sessao_por_hora_e_nao_loga_conte
     finally:
         app.dependency_overrides.clear()
         client.close()
+
+
+def test_chat_erro_4xx_gemini_nao_abre_circuit_breaker_e_rate_limit_remove_sessoes_expiradas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from google.genai import errors
+
+    def _erro_chave_invalida(*args: Any, **kwargs: Any) -> str:
+        raise errors.APIError(401, {"error": {"message": "API key not valid"}})
+
+    monkeypatch.setattr(guide, "_request_chat_json", _erro_chave_invalida)
+    client = _criar_cliente_autenticado(monkeypatch)
+    try:
+        breaker_guide = app.state.circuit_breakers["guide"]
+        breaker_guide.state = CircuitState.CLOSED
+        breaker_guide.failure_count = 0
+
+        # Simula uma sessão antiga expirada em memória para verificar limpeza automática
+        _HISTORICO_MENSAGENS_POR_SESSAO["session:expirada-antiga"] = [
+            time.monotonic() - (CHAT_RATE_LIMIT_WINDOW_SECONDS + 10.0)
+        ]
+
+        resp = client.post(
+            "/api/v1/chat/mensagens",
+            headers={"Accept-Language": "es"},
+            json={
+                "messages": [{"role": "user", "content": "Hola"}],
+                "origin": "Teresina - PI",
+                "destination": "Parque Nacional de Sete Cidades",
+            },
+        )
+        assert resp.status_code == 200
+        assert "No pude comunicarme con la IA ahora" in resp.json()["reply"]
+        # Erro 401 de chave não deve abrir o circuit breaker compartilhado 'guide'
+        assert breaker_guide.failure_count == 0
+        assert breaker_guide.state == CircuitState.CLOSED
+        # A chave expirada deve ter sido removida do dicionário em memória
+        assert "session:expirada-antiga" not in _HISTORICO_MENSAGENS_POR_SESSAO
+    finally:
+        app.dependency_overrides.clear()
+        client.close()
+

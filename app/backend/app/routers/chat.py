@@ -14,7 +14,6 @@ from app.schemas.chat import RequisicaoChat, RespostaChat
 from app.services.guide import (
     _resolver_idioma_compat,
     conversar_roteiro,
-    montar_instrucao_idioma_chat,
 )
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
@@ -32,12 +31,6 @@ def limpar_rate_limit_chat() -> None:
 def obter_idioma_requisicao(request: Request) -> str:
     """Extrai e resolve o idioma da requisição a partir do cabeçalho Accept-Language."""
     return _resolver_idioma_compat(request.headers.get("accept-language"))
-
-
-def preparar_instrucao_idioma_chat(request: Request) -> str:
-    """Resolve o Accept-Language da requisição e monta a diretriz de idioma do prompt."""
-    idioma = obter_idioma_requisicao(request)
-    return montar_instrucao_idioma_chat(idioma)
 
 
 def _chave_sessao_chat(request: Request, user: dict[str, Any]) -> str:
@@ -101,7 +94,6 @@ async def enviar_mensagem_chat(
     """
     _verificar_cota_sessao(request, user)
     idioma = obter_idioma_requisicao(request)
-    _ = preparar_instrucao_idioma_chat(request)
     resultado = await conversar_roteiro(
         messages=[mensagem.model_dump() for mensagem in payload.messages],
         origin=payload.origin,

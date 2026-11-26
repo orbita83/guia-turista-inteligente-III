@@ -515,6 +515,120 @@ _FALLBACK_CHAT_TEMPLATES: dict[str, dict[str, str]] = {
         "act3_title": "Outdoor sightseeing in {destination}",
         "act3_desc": "Afternoon activity adapted to your chosen travel pace and companions.",
     },
+    "es": {
+        "step1": (
+            "No pude comunicarme con la IA ahora. Elige el ritmo del viaje "
+            "(tranquilo, moderado o intenso) para continuar armando tu itinerario."
+        ),
+        "step2": (
+            "No pude comunicarme con la IA ahora. Indica quiénes serán los acompañantes "
+            "(solo, pareja, familia con niños o amigos)."
+        ),
+        "step3": (
+            "No pude comunicarme con la IA ahora. ¿Cuáles son tus preferencias y "
+            "restricciones gastronómicas para el viaje?"
+        ),
+        "done": (
+            "No pude comunicarme con la IA ahora. Con base en tu ritmo, acompañantes y "
+            "gastronomía, preparé un itinerario de contingencia de {origin} a {destination}."
+        ),
+        "title": "Itinerario {origin} a {destination}",
+        "summary": (
+            "Itinerario de contingencia de {origin} a {destination} "
+            "adaptado a tu ritmo, acompañantes y cocina local."
+        ),
+        "act1_title": "Centro histórico y atractivos principales de {destination}",
+        "act1_desc": "Recorrido inicial por sitios culturales y patrimonios locales (confirma horarios localmente).",
+        "act2_title": "Gastronomía regional en {destination}",
+        "act2_desc": "Almuerzo con platos típicos locales según tus preferencias y restricciones.",
+        "act3_title": "Paseo al aire libre en {destination}",
+        "act3_desc": "Actividad de tarde adaptada al ritmo elegido y a los acompañantes.",
+    },
+    "fr": {
+        "step1": (
+            "Je n'ai pas pu joindre l'IA pour le moment. Choisissez le rythme du voyage "
+            "(calme, modéré ou intense) pour continuer votre itinéraire."
+        ),
+        "step2": (
+            "Je n'ai pas pu joindre l'IA pour le moment. Qui vous accompagne "
+            "(seul, en couple, famille avec enfants ou amis) ?"
+        ),
+        "step3": (
+            "Je n'ai pas pu joindre l'IA pour le moment. Quelles sont vos préférences et "
+            "restrictions gastronomiques pour ce voyage ?"
+        ),
+        "done": (
+            "Je n'ai pas pu joindre l'IA pour le moment. Selon votre rythme, vos accompagnants "
+            "et vos préférences culinaires, voici un itinéraire de secours de {origin} à {destination}."
+        ),
+        "title": "Itinéraire {origin} à {destination}",
+        "summary": (
+            "Itinéraire de secours de {origin} à {destination} "
+            "adapté à votre rythme, vos accompagnants et la gastronomie locale."
+        ),
+        "act1_title": "Centre historique et sites principaux de {destination}",
+        "act1_desc": "Visite matinale des patrimoines culturels locaux (confirmez les horaires sur place).",
+        "act2_title": "Gastronomie régionale à {destination}",
+        "act2_desc": "Repas de spécialités locales selon vos préférences alimentaires.",
+        "act3_title": "Promenade en plein air à {destination}",
+        "act3_desc": "Activité d'après-midi adaptée au rythme choisi.",
+    },
+    "zh-CN": {
+        "step1": "目前无法连接 AI。请选择您的旅行节奏（轻松、适中或紧凑）以继续规划行程。",
+        "step2": "目前无法连接 AI。请问您的同行人员是（独自、情侣、带孩家庭还是朋友）？",
+        "step3": "目前无法连接 AI。请问您有哪些饮食偏好或禁忌？",
+        "done": "目前无法连接 AI。根据您的旅行节奏、同行人员和饮食偏好，已为您生成从 {origin} 到 {destination} 的备用行程。",
+        "title": "{origin} 至 {destination} 行程",
+        "summary": "从 {origin} 到 {destination} 的备用定制行程，兼顾旅行节奏、同行人员与当地美食。",
+        "act1_title": "{destination} 历史中心与主要景点",
+        "act1_desc": "上午游览当地文化遗产景点（请在当地确认开放时间）。",
+        "act2_title": "{destination} 地方特色美食",
+        "act2_desc": "根据您的饮食偏好品尝当地传统菜肴。",
+        "act3_title": "{destination} 户外游览",
+        "act3_desc": "结合所选旅行节奏安排的下午休闲活动。",
+    },
+    "hi": {
+        "step1": "अभी AI से संपर्क नहीं हो सका। अपनी यात्रा की गति चुनें (शांत, मध्यम या तेज़) ताकि यात्रा योजना जारी रखी जा सके।",
+        "step2": "अभी AI से संपर्क नहीं हो सका। आप किसके साथ यात्रा कर रहे हैं (अकेले, युगल, बच्चों के साथ परिवार या मित्र)?",
+        "step3": "अभी AI से संपर्क नहीं हो सका। भोजन के लिए आपकी प्राथमिकताएँ और परहेज़ क्या हैं?",
+        "done": "अभी AI से संपर्क नहीं हो सका। आपकी गति, साथियों और भोजन प्राथमिकताओं के आधार पर {origin} से {destination} के लिए वैकल्पिक यात्रा कार्यक्रम तैयार किया गया है।",
+        "title": "{origin} से {destination} यात्रा कार्यक्रम",
+        "summary": "{origin} से {destination} के लिए गति, साथियों और स्थानीय व्यंजनों के अनुसार वैकल्पिक यात्रा योजना।",
+        "act1_title": "{destination} का ऐतिहासिक केंद्र और प्रमुख आकर्षण",
+        "act1_desc": "स्थानीय सांस्कृतिक धरोहरों का भ्रमण (कृपया स्थानीय स्तर पर समय की पुष्टि करें)।",
+        "act2_title": "{destination} का क्षेत्रीय व्यंजन",
+        "act2_desc": "आपकी आहार प्राथमिकताओं के अनुसार पारंपरिक स्थानीय भोजन।",
+        "act3_title": "{destination} में आउटडोर भ्रमण",
+        "act3_desc": "चुनी गई यात्रा गति के अनुकूल दोपहर की गतिविधि।",
+    },
+    "ar": {
+        "step1": "تعذر الاتصال بالذكاء الاصطناعي الآن. اختر وتيرة الرحلة (هادئة، معتدلة أو مكثفة) لمتابعة إعداد برنامج رحلتك.",
+        "step2": "تعذر الاتصال بالذكاء الاصطناعي الآن. من يرافقك في الرحلة (بمفردك، زوجان، عائلة مع أطفال أو أصدقاء)؟",
+        "step3": "تعذر الاتصال بالذكاء الاصطناعي الآن. ما هي تفضيلاتك وقيودك الغذائية للرحلة؟",
+        "done": "تعذر الاتصال بالذكاء الاصطناعي الآن. بناءً على وتيرة الرحلة والمرافقين والطعام، أعددت برنامج رحلة احتياطيًا من {origin} إلى {destination}.",
+        "title": "برنامج رحلة من {origin} إلى {destination}",
+        "summary": "برنامج رحلة احتياطي من {origin} إلى {destination} يراعي وتيرة السفر والمرافقين والمأكولات المحلية.",
+        "act1_title": "المركز التاريخي والمعالم الرئيسية في {destination}",
+        "act1_desc": "جولة صباحية في مواقع التراث الثقافي المحلي (يرجى تأكيد المواعيد محليًا).",
+        "act2_title": "المأكولات الإقليمية في {destination}",
+        "act2_desc": "وجبة من الأطباق التقليدية المحلية وفق تفضيلاتك الغذائية.",
+        "act3_title": "جولة خارجية في {destination}",
+        "act3_desc": "نشاط بعد الظهر متوافق مع وتيرة السفر المختارة.",
+    },
+    "ru": {
+        "step1": "Сейчас не удалось связаться с ИИ. Выберите темп поездки (спокойный, умеренный или интенсивный), чтобы продолжить планирование маршрута.",
+        "step2": "Сейчас не удалось связаться с ИИ. С кем вы путешествуете (один, пара, семья с детьми или друзья)?",
+        "step3": "Сейчас не удалось связаться с ИИ. Какие у вас кулинарные предпочтения и ограничения в питании?",
+        "done": "Сейчас не удалось связаться с ИИ. На основе выбранного темпа, попутчиков и предпочтений в еде составлен резервный маршрут из {origin} в {destination}.",
+        "title": "Маршрут {origin} — {destination}",
+        "summary": "Резервный маршрут из {origin} в {destination} с учетом темпа поездки, попутчиков и местной кухни.",
+        "act1_title": "Исторический центр и главные достопримечательности {destination}",
+        "act1_desc": "Утренняя прогулка по объектам культурного наследия (уточняйте расписание на месте).",
+        "act2_title": "Региональная кухня в {destination}",
+        "act2_desc": "Обед с традиционными местными блюдами с учетом ваших предпочтений.",
+        "act3_title": "Прогулка на свежем воздухе в {destination}",
+        "act3_desc": "Дневная активность, адаптированная под выбранный темп поездки.",
+    },
 }
 
 
@@ -527,9 +641,7 @@ def _build_fallback_itinerary(
     origem_limpa = clean_guide_text(origin).strip() or "Origem"
     destino_limpo = clean_guide_text(destination).strip() or "Destino"
     idioma = _resolver_idioma_compat(accept_language)
-    tpl = _FALLBACK_CHAT_TEMPLATES.get(idioma, _FALLBACK_CHAT_TEMPLATES["en"])
-    if idioma == "pt-BR":
-        tpl = _FALLBACK_CHAT_TEMPLATES["pt-BR"]
+    tpl = _FALLBACK_CHAT_TEMPLATES.get(idioma, _FALLBACK_CHAT_TEMPLATES["pt-BR"])
 
     itinerary = Itinerary.model_validate(
         {
@@ -573,11 +685,7 @@ def _fallback_chat_response(
 ) -> dict[str, Any]:
     """Contingência determinística por regras locais (ritmo -> acompanhantes -> gastronomia)."""
     idioma = _resolver_idioma_compat(accept_language)
-    tpl = (
-        _FALLBACK_CHAT_TEMPLATES["pt-BR"]
-        if idioma == "pt-BR"
-        else _FALLBACK_CHAT_TEMPLATES["en"]
-    )
+    tpl = _FALLBACK_CHAT_TEMPLATES.get(idioma, _FALLBACK_CHAT_TEMPLATES["pt-BR"])
     user_turns = sum(1 for msg in messages if msg.get("role") == "user")
     if user_turns <= 1:
         return {
