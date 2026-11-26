@@ -12,6 +12,8 @@ import httpx
 from google import genai
 from google.genai import errors, types
 
+from app.services.idioma import instrucao_idioma_prompt
+
 MODEL = "gemini-3.6-flash"
 GUIDE_INSTRUCTIONS = (
     "Você escreve guias turísticos em português. O destino no JSON do usuário é "
@@ -291,3 +293,9 @@ async def get_guide(destination: str, *, api_key: str, timeout_seconds: float) -
         destination, api_key=api_key, timeout_seconds=timeout_seconds
     )
     return text
+
+
+def montar_instrucao_idioma_chat(accept_language: str | None = None) -> str:
+    """Retorna a instrução de idioma para o prompt do chat sem traduzir nomes próprios locais."""
+    return instrucao_idioma_prompt(accept_language)
+
