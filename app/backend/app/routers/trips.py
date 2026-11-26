@@ -2,6 +2,7 @@ import asyncio
 import re
 import time
 from typing import Any
+from uuid import uuid4
 
 import httpx
 from fastapi import (
@@ -32,6 +33,7 @@ from app.schemas.trips import (
     TripListResponse,
     ViagemLegada,
 )
+from app.services.events import executar_tarefa_com_dlq, resolver_idioma_seguro
 from app.services.gpx import generate_gpx
 from app.services.trips import delete_trip, list_trips, persist_trip, plan_trip
 
@@ -183,7 +185,21 @@ async def create_trip(
             _active_requests.discard(key)
 
     diagnostic = trip.get("diagnostico_ia")
-    background_tasks.add_task(persist_trip, storage, str(user["id"]), trip, user)
+    trace_id = getattr(request.state, "request_id", None) or uuid4().hex
+    route_obj = request.scope.get("route")
+    route_template = str(getattr(route_obj, "path", "/api/v1/roteiros/planejar"))
+    background_tasks.add_task(
+        executar_tarefa_com_dlq,
+        persist_trip,
+        storage,
+        str(user["id"]),
+        trip,
+        user,
+        trace_id=trace_id,
+        method=request.method,
+        route=route_template,
+        language=resolver_idioma_seguro(request.headers.get("accept-language")),
+    )
     warning = None
     if (
         isinstance(diagnostic, dict)
