@@ -148,6 +148,19 @@ function extrairTraceIdDeErro(payload: unknown, response: Response): string | un
   return reqId.available ? reqId.value : undefined;
 }
 
+function mensagemAmigavelPorStatus(status: number): string {
+  if (status === 401) {
+    return 'Sua sessão expirou ou não está autenticada. Entre novamente para conversar com o assistente.';
+  }
+  if (status === 422) {
+    return 'Verifique os limites da mensagem (até 1000 caracteres e 12 mensagens) e os campos de origem e destino.';
+  }
+  if (status === 429) {
+    return 'Limite de mensagens atingido nesta sessão. Aguarde alguns minutos e tente novamente.';
+  }
+  return MENSAGEM_ERRO_AMIGAVEL_PADRAO;
+}
+
 export async function enviarMensagem(
   messages: MensagemChat[],
   origin: string,
@@ -181,13 +194,19 @@ export async function enviarMensagem(
       payload = null;
     }
     const traceId = extrairTraceIdDeErro(payload, response);
-    const message =
-      response.status === 429
-        ? 'Limite de mensagens atingido nesta sessão. Aguarde alguns minutos e tente novamente.'
-        : MENSAGEM_ERRO_AMIGAVEL_PADRAO;
-    throw new ChatApiError(message, response.status, traceId);
+    throw new ChatApiError(mensagemAmigavelPorStatus(response.status), response.status, traceId);
   }
 
-  const payload: unknown = await response.json();
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    const reqId = parseRequestId(response.headers.get('X-Request-ID'));
+    throw new ChatApiError(
+      MENSAGEM_ERRO_AMIGAVEL_PADRAO,
+      response.status,
+      reqId.available ? reqId.value : undefined,
+    );
+  }
   return parseRespostaChat(payload);
 }

@@ -1,6 +1,6 @@
 /** Tela de diálogo com a IA para montar o roteiro — implementada por P4 na issue #12 (T0016). */
 
-import type { FormEvent, KeyboardEvent } from 'react';
+import type { ComponentType, FormEvent, KeyboardEvent } from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 
 import { enviarMensagem } from '../services/chatApi';
@@ -19,6 +19,37 @@ const DESTINO_PADRAO = 'Piripiri - PI';
 interface ErroChatEstado {
   mensagem: string;
   traceId?: string;
+}
+
+const EnvioRoteiroJSX = EnvioRoteiro as unknown as ComponentType<{
+  itinerary: Itinerary;
+  onSent?: () => void;
+}>;
+
+const ErroAmigavelJSX = ErroAmigavel as unknown as ComponentType<{
+  traceId?: string;
+  onTentarNovamente?: () => void;
+}>;
+
+function isComponenteImplementado(componente: unknown): boolean {
+  if (typeof componente === 'object' && componente !== null) {
+    return true;
+  }
+  if (typeof componente !== 'function') {
+    return false;
+  }
+  const fonte = Function.prototype.toString.call(componente).replace(/\s+/g, ' ');
+  return !/\{\s*return\s+null;?\s*\}$/.test(fonte);
+}
+
+function isUrlHttpSegura(url: string | undefined): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function lerOrigemDestinoFormularioPrincipal(): { origin: string; destination: string } {
@@ -73,6 +104,8 @@ export function ChatIA() {
   const [inputText, setInputText] = useState('');
   const [origin, setOrigin] = useState(ORIGEM_PADRAO);
   const [destination, setDestination] = useState(DESTINO_PADRAO);
+  const [origemEditadaManual, setOrigemEditadaManual] = useState(false);
+  const [destinoEditadoManual, setDestinoEditadoManual] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [done, setDone] = useState(false);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
@@ -114,16 +147,9 @@ export function ChatIA() {
     origin.trim().length === 0 ||
     destination.trim().length === 0;
 
-  // Enquanto EnvioRoteiro (P5, #15) for o stub sem props do PR 0, o botão fica desabilitado com title="Em breve".
-  const envioRoteiroDisponivel = EnvioRoteiro.length > 0;
-  const EnvioRoteiroComponente = EnvioRoteiro as unknown as (props: {
-    itinerary: Itinerary;
-    onSent?: () => void;
-  }) => ReturnType<typeof EnvioRoteiro>;
-  const ErroAmigavelComponente = ErroAmigavel as unknown as (props: {
-    traceId?: string;
-    onTentarNovamente?: () => void;
-  }) => ReturnType<typeof ErroAmigavel>;
+  // Enquanto EnvioRoteiro (P5, #15) for o stub que retorna null do PR 0, o botão fica desabilitado com title="Em breve".
+  const envioRoteiroDisponivel = isComponenteImplementado(EnvioRoteiro);
+  const erroAmigavelImplementado = isComponenteImplementado(ErroAmigavel);
 
   async function submeterMensagem(textoParaEnviar: string) {
     const conteudo = textoParaEnviar.trim();
@@ -136,11 +162,24 @@ export function ChatIA() {
       return;
     }
 
+    const doFormulario = lerOrigemDestinoFormularioPrincipal();
+    const origemEfetiva =
+      (origemEditadaManual ? origin : doFormulario.origin).trim() || ORIGEM_PADRAO;
+    const destinoEfetivo =
+      (destinoEditadoManual ? destination : doFormulario.destination).trim() || DESTINO_PADRAO;
+    if (!origemEditadaManual && origemEfetiva !== origin) {
+      setOrigin(origemEfetiva);
+    }
+    if (!destinoEditadoManual && destinoEfetivo !== destination) {
+      setDestination(destinoEfetivo);
+    }
+
+    const historicoAnterior = messages;
     const novaMensagemUsuario: MensagemChat = {
       role: 'user',
       content: conteudo,
     };
-    const proximoHistorico = [...messages, novaMensagemUsuario];
+    const proximoHistorico = [...historicoAnterior, novaMensagemUsuario];
 
     setMessages(proximoHistorico);
     setInputText('');
@@ -156,8 +195,8 @@ export function ChatIA() {
     try {
       const resposta = await enviarMensagem(
         proximoHistorico,
-        origin.trim() || ORIGEM_PADRAO,
-        destination.trim() || DESTINO_PADRAO,
+        origemEfetiva,
+        destinoEfetivo,
         controller.signal,
       );
 
@@ -165,12 +204,7 @@ export function ChatIA() {
         role: 'assistant',
         content: resposta.reply,
       };
-      setMessages((atual) => {
-        if (atual.length >= MAX_CHAT_MESSAGES) {
-          return atual;
-        }
-        return [...atual, mensagemAssistente];
-      });
+      setMessages([...proximoHistorico, mensagemAssistente].slice(0, MAX_CHAT_MESSAGES));
       setDone(resposta.done);
       if (resposta.done && resposta.itinerary) {
         setItinerary(resposta.itinerary);
@@ -179,6 +213,9 @@ export function ChatIA() {
       if (controller.signal.aborted) {
         return;
       }
+      // Reverte a mensagem não processada para não consumir o limite de 12 mensagens e restaura o texto no campo.
+      setMessages(historicoAnterior);
+      setInputText(conteudo);
       const traceId = extrairTraceIdDeExcecao(err);
       setErro({
         mensagem:
@@ -210,6 +247,18 @@ export function ChatIA() {
     inputRef.current?.focus();
   }
 
+  function handleNovaConversa() {
+    abortControllerRef.current?.abort();
+    setMessages([]);
+    setInputText('');
+    setDone(false);
+    setItinerary(null);
+    setErro(null);
+    setMostrarModalEnvio(false);
+    setCopiado(false);
+    inputRef.current?.focus();
+  }
+
   async function handleCopiarTraceId(traceId: string) {
     try {
       await navigator.clipboard?.writeText(traceId);
@@ -218,13 +267,6 @@ export function ChatIA() {
       setCopiado(false);
     }
   }
-
-  const elementoErroPadrao = erro
-    ? ErroAmigavelComponente({
-        traceId: erro.traceId,
-        onTentarNovamente: handleTentarNovamente,
-      })
-    : null;
 
   return (
     <section className="card chat-ia-card" aria-label="Assistente de Roteiro com IA">
@@ -235,6 +277,11 @@ export function ChatIA() {
             Personalize seu roteiro informando ritmo, acompanhantes e preferências gastronômicas.
           </p>
         </div>
+        {(done || limiteMensagensAtingido) && (
+          <button type="button" className="chat-ia-btn-secondary" onClick={handleNovaConversa}>
+            Nova conversa
+          </button>
+        )}
       </header>
 
       <div className="chat-ia-context-row">
@@ -248,7 +295,10 @@ export function ChatIA() {
             className="chat-ia-input"
             value={origin}
             maxLength={MAX_CHAT_LOCATION_LENGTH}
-            onChange={(e) => setOrigin(e.target.value)}
+            onChange={(e) => {
+              setOrigemEditadaManual(true);
+              setOrigin(e.target.value);
+            }}
             disabled={isSending}
           />
         </div>
@@ -262,7 +312,10 @@ export function ChatIA() {
             className="chat-ia-input"
             value={destination}
             maxLength={MAX_CHAT_LOCATION_LENGTH}
-            onChange={(e) => setDestination(e.target.value)}
+            onChange={(e) => {
+              setDestinoEditadoManual(true);
+              setDestination(e.target.value);
+            }}
             disabled={isSending}
           />
         </div>
@@ -297,35 +350,43 @@ export function ChatIA() {
         )}
 
         {isSending && (
-          <div className="chat-ia-typing" role="status" aria-live="polite">
+          <div className="chat-ia-typing" role="status">
             <span className="spinner-inline" aria-hidden="true" />
             <span>Assistente está digitando...</span>
           </div>
         )}
       </div>
 
-      {erro &&
-        (elementoErroPadrao ?? (
-          <div className="chat-ia-error" role="alert">
-            <p className="chat-ia-error-text">{erro.mensagem}</p>
-            {erro.traceId && (
-              <p className="chat-ia-error-trace">
-                Se o problema continuar, informe o código:{' '}
-                <code className="chat-ia-trace-code">{erro.traceId}</code>
-                <button
-                  type="button"
-                  className="chat-ia-btn-secondary chat-ia-copy-btn"
-                  onClick={() => void handleCopiarTraceId(erro.traceId!)}
-                >
-                  {copiado ? 'Código copiado' : 'Copiar código'}
-                </button>
-              </p>
-            )}
-            <button type="button" className="chat-ia-btn-secondary" onClick={handleTentarNovamente}>
-              Tentar novamente
-            </button>
-          </div>
-        ))}
+      {erro && (
+        <div className="chat-ia-error-wrapper">
+          <ErroAmigavelJSX traceId={erro.traceId} onTentarNovamente={handleTentarNovamente} />
+          {!erroAmigavelImplementado && (
+            <div className="chat-ia-error" role="alert">
+              <p className="chat-ia-error-text">{erro.mensagem}</p>
+              {erro.traceId && (
+                <p className="chat-ia-error-trace">
+                  Se o problema continuar, informe o código:{' '}
+                  <code className="chat-ia-trace-code">{erro.traceId}</code>
+                  <button
+                    type="button"
+                    className="chat-ia-btn-secondary chat-ia-copy-btn"
+                    onClick={() => void handleCopiarTraceId(erro.traceId!)}
+                  >
+                    {copiado ? 'Código copiado' : 'Copiar código'}
+                  </button>
+                </p>
+              )}
+              <button
+                type="button"
+                className="chat-ia-btn-secondary"
+                onClick={handleTentarNovamente}
+              >
+                Tentar novamente
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <form className="chat-ia-form" onSubmit={handleFormSubmit} noValidate>
         <div className="chat-ia-input-group">
@@ -384,19 +445,31 @@ export function ChatIA() {
                   : ''}
               </p>
             </div>
-            <button
-              type="button"
-              className="chat-ia-send-itinerary-btn"
-              disabled={!envioRoteiroDisponivel}
-              title={envioRoteiroDisponivel ? 'Enviar roteiro' : 'Em breve'}
-              onClick={() => {
-                if (envioRoteiroDisponivel) {
-                  setMostrarModalEnvio(true);
-                }
-              }}
-            >
-              Enviar por e-mail / WhatsApp
-            </button>
+            <div className="chat-ia-itinerary-actions">
+              {isUrlHttpSegura(itinerary.map_url) && (
+                <a
+                  href={itinerary.map_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="chat-ia-btn-secondary chat-ia-map-link"
+                >
+                  Ver rota no Google Maps
+                </a>
+              )}
+              <button
+                type="button"
+                className="chat-ia-send-itinerary-btn"
+                disabled={!envioRoteiroDisponivel}
+                title={envioRoteiroDisponivel ? 'Enviar roteiro' : 'Em breve'}
+                onClick={() => {
+                  if (envioRoteiroDisponivel) {
+                    setMostrarModalEnvio(true);
+                  }
+                }}
+              >
+                Enviar por e-mail / WhatsApp
+              </button>
+            </div>
           </header>
 
           {itinerary.summary && <p className="chat-ia-itinerary-summary">{itinerary.summary}</p>}
@@ -426,10 +499,7 @@ export function ChatIA() {
 
           {mostrarModalEnvio && envioRoteiroDisponivel && (
             <div className="chat-ia-dispatch-container">
-              <EnvioRoteiroComponente
-                itinerary={itinerary}
-                onSent={() => setMostrarModalEnvio(false)}
-              />
+              <EnvioRoteiroJSX itinerary={itinerary} onSent={() => setMostrarModalEnvio(false)} />
             </div>
           )}
         </section>

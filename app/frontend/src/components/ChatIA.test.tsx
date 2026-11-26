@@ -104,6 +104,10 @@ describe('ChatIA e chatApi (Issue #12 · T0016)', () => {
     const botaoEnvio = screen.getByRole('button', { name: 'Enviar por e-mail / WhatsApp' });
     expect(botaoEnvio).toBeDisabled();
     expect(botaoEnvio).toHaveAttribute('title', 'Em breve');
+    expect(screen.getByRole('link', { name: 'Ver rota no Google Maps' })).toHaveAttribute(
+      'href',
+      ROTEIRO_EXEMPLO.map_url,
+    );
   });
 
   it('exibe estado digitando durante o envio e desabilita o botão', async () => {
@@ -173,6 +177,9 @@ describe('ChatIA e chatApi (Issue #12 · T0016)', () => {
     await user.click(screen.getByRole('button', { name: 'Tentar novamente' }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(campoMensagem).toHaveFocus();
+    // A mensagem que falhou é restaurada no input e não consome o limite de 12 mensagens como órfã
+    expect(campoMensagem).toHaveValue('Teste de falha');
+    expect(screen.getByText('0/12 mensagens')).toBeInTheDocument();
   });
 
   it('extrai trace_id do cabeçalho X-Request-ID em ChatApiError quando o corpo não traz trace_id', async () => {

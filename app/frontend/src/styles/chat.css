@@ -281,6 +281,17 @@
   gap: 0.75rem;
 }
 
+.chat-ia-itinerary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.chat-ia-map-link {
+  text-decoration: none;
+}
+
 .chat-ia-itinerary-title {
   font-size: 1.05rem;
   font-weight: 700;
