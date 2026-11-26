@@ -3,6 +3,7 @@ import re
 import threading
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from importlib import import_module
 from time import monotonic, perf_counter
 from typing import Any
@@ -134,6 +135,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # o pool de conexões ainda é fechado.
         app.state.trip_storage = TripStorage(settings.trips_file)
         app.state.started_at = monotonic()
+        app.state.started_at_utc = datetime.now(UTC)
         app.state.circuit_breakers = build_circuit_breakers()
         app.state.stream_observer = STREAM_METRICS
         yield
@@ -158,6 +160,9 @@ app = FastAPI(
     lifespan=lifespan,
     openapi_tags=OPENAPI_TAGS,
 )
+app.state.http_requests_counter = HTTP_REQUESTS
+app.state.http_latency_histogram = HTTP_LATENCY
+app.state.get_in_flight_requests = _current_active_http_requests
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.secret_key,
