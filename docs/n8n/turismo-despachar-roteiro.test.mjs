@@ -124,3 +124,53 @@ test('eventos só entram na janela dos últimos 50 após entrega bem-sucedida', 
   assert.equal(state.sentEventIds.length, 50);
   assert.equal(state.sentEventIds[0], '10');
 });
+
+test('resumo e descrição longos da IA são aceitos e preservados com escape HTML', () => {
+  const event = fixture();
+  const content = 'a'.repeat(5000) + '<script>&';
+  event.itinerary.summary = content;
+  event.itinerary.days[0].activities[0].description = content;
+  assert.equal(run('Validar e deduplicar', { body: event })[0].json.valid, true);
+  const email = run('Montar email', { event })[0].json;
+  assert.equal(email.html.split('a'.repeat(5000) + '&lt;script&gt;&amp;').length - 1, 2);
+  assert.doesNotMatch(email.html, /<script>/);
+});
+
+test('falhas de validação preservam o idioma suportado e usam fallback para idioma inválido', () => {
+  for (const [language, expected] of [['en', 'en'], ['pt-BR', 'pt-BR'], [null, 'pt-BR'], ['invalid', 'pt-BR']]) {
+    const event = fixture();
+    event.language = language;
+    event.recipient.email = 'invalid';
+    const failure = run('Validar e deduplicar', { body: event })[0].json;
+    assert.equal(failure.valid, false);
+    assert.equal(run('Montar DLQ', failure)[0].json.request.language, expected);
+  }
+});
+
+test('resumo ausente, nulo, vazio ou só espaços não gera parágrafo vazio', () => {
+  for (const summary of [undefined, null, '', '   ']) {
+    const event = fixture();
+    event.itinerary.summary = summary;
+    assert.doesNotMatch(run('Montar email', { event })[0].json.html, /<p style="line-height:1\.6">\s*<\/p>/);
+  }
+});
+
+test('erro SMTP segue para DLQ sem expor erro bruto nem impedir retentativa', () => {
+  const event = fixture();
+  event.language = 'en';
+  const state = {};
+  const smtp = workflow.nodes.find((node) => node.name === 'Enviar email SMTP');
+  assert.equal(smtp.onError, 'continueErrorOutput');
+  assert.equal(workflow.connections[smtp.name].main[1][0].node, 'Falha email');
+  assert.equal(workflow.connections['Falha email'].main[0][0].node, 'Montar DLQ');
+  const failure = run('Falha email', { error: 'provider-secret fixture@example.invalid' }, {
+    state, references: { 'Montar email': { event } },
+  })[0].json;
+  const dlq = run('Montar DLQ', failure, { state })[0].json;
+  assert.equal(dlq.error.type, 'EmailDeliveryFailed');
+  assert.equal(dlq.trace_id, event.trace_id);
+  assert.equal(dlq.request.language, 'en');
+  assert.doesNotMatch(JSON.stringify(dlq), /provider-secret|fixture@example\.invalid/);
+  assert.equal(state.sentEventIds, undefined);
+  assert.equal(run('Validar e deduplicar', { body: event }, { state })[0].json.valid, true);
+});

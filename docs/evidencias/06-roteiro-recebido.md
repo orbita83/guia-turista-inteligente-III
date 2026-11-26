@@ -88,8 +88,18 @@ atual: o reteste integrado acima ocorreu após a publicação do despacho.
 - O JSON versionado é portável e sanitizado: credenciais e remetente são
   marcadores, `pinData` é vazio e `active: false` evita ativação na importação.
   Isso não contradiz a instância publicada mostrada na Evidência 1b.
+- Revisão adicional em 26/11/2026: resumo e descrição não têm mais o teto
+  local de 500 caracteres, acompanhando o contrato e o modelo Pydantic;
+  o texto completo continua escapado no HTML. Falhas de validação preservam
+  `pt-BR`/`en` (fallback `pt-BR`) e resumo vazio não gera parágrafo.
 - Testes locais de regressão:
-  `node --test docs/n8n/turismo-despachar-roteiro.test.mjs` (19 testes).
+  `node --test docs/n8n/turismo-despachar-roteiro.test.mjs` (23 testes),
+  incluindo textos com mais de 5.000 caracteres e erro SMTP com DLQ segura
+  e possibilidade de retentativa. São testes em VM dos nós Code e das
+  conexões exportadas; não simulam uma rejeição real do servidor SMTP.
+- As evidências de produção de 25/11/2026 correspondem à versão publicada
+  naquele dia. A revisão de 26/11/2026 foi validada localmente; atualizar
+  o JSON no repositório não publica automaticamente a alteração no n8n.
 - Este arquivo é a contribuição de P5. O README/índice compartilhado pertence
   à #22 (Alisson), que pode incorporar ou vincular esta seção; este PR não
   cria nem substitui o template.
