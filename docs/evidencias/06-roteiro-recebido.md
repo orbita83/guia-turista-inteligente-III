@@ -98,8 +98,43 @@ atual: o reteste integrado acima ocorreu após a publicação do despacho.
   e possibilidade de retentativa. São testes em VM dos nós Code e das
   conexões exportadas; não simulam uma rejeição real do servidor SMTP.
 - As evidências de produção de 25/11/2026 correspondem à versão publicada
-  naquele dia. A revisão de 26/11/2026 foi validada localmente; atualizar
-  o JSON no repositório não publica automaticamente a alteração no n8n.
+  naquele dia. A revisão de 26/11/2026 foi publicada e os novos pedidos
+  estão registrados abaixo; atualizar o JSON no repositório, por si só,
+  não publica automaticamente a alteração no n8n.
 - Este arquivo é a contribuição de P5. O README/índice compartilhado pertence
   à #22 (Alisson), que pode incorporar ou vincular esta seção; este PR não
   cria nem substitui o template.
+
+## Publicação e reteste em 26/11/2026
+
+Versão publicada no n8n: **T0013 — revisão a0d72d0 — 26/11/2026**.
+O indicador `Published` foi observado após a confirmação de publicação.
+Antes disso, o rascunho foi exportado e todos os nós Code e ambas as notas
+foram comparados com o JSON do repositório: conteúdo idêntico. As conexões
+foram conferidas; remetente, ambiente e credenciais existentes foram preservados.
+O export da instância, com configurações pessoais, não foi incluído no Git.
+
+Às 11:12 (Brasília), foram enviados pedidos à URL de produção usando o
+segredo local, sem exibi-lo:
+
+| Pedido | Resultado observado |
+| --- | --- |
+| Evento válido em inglês, com resumo de 1.405 caracteres, descrição de 1.915 caracteres, dois dias e opcionais nulos | HTTP 202 |
+| Mesmo evento repetido após 12 segundos | HTTP 202 |
+| Novo evento com destinatário inválido e `language: en` | HTTP 202 |
+
+- Evento válido e repetido: `84dfadb8-fe94-4353-ae77-032ba4a94f96`.
+- Rastreio do envio válido: `333bbfeac02a4cdd9a28ac8247649962`.
+- Evento inválido: `46af8b39-0336-4e2c-8f0c-1631ac16e22d`.
+- Rastreio do alerta: `e1392fe2a3864b44ba473d0710641a2b`.
+- Assunto esperado: `Your itinerary: Validação atualização T0013 a0d72d0`.
+
+As respostas HTTP confirmam aceitação, não entrega. Cássio confirmou no chat
+o recebimento de exatamente um e-mail com o assunto acima, texto longo e
+`<script>alert(1)</script>` exibido como texto, além do alerta `InvalidRecipient`
+com rastreio começando por `e1392fe2` no Telegram. A confirmação das entregas
+foi humana e correlacionada a estes pedidos; não foi capturada nova imagem
+da caixa de entrada nem do grupo pelo agente.
+O teste de falha usa validação do destinatário, sem simular indisponibilidade
+real do servidor SMTP. O evento enviado à falha usa `en`; a apresentação no
+Telegram depende também do workflow da DLQ.
