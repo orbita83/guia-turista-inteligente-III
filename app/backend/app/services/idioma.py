@@ -48,15 +48,14 @@ def _parametros_accept_language_validos(parametros: list[str]) -> bool:
         if not texto or "=" not in texto:
             return False
         chave, valor = (parte.strip() for parte in texto.split("=", 1))
-        if not chave or not valor:
+        if not chave or not valor or chave.lower() != "q":
             return False
-        if chave.lower() == "q":
-            try:
-                peso = float(valor)
-            except ValueError:
-                return False
-            if not (0.0 < peso <= 1.0):
-                return False
+        try:
+            peso = float(valor)
+        except ValueError:
+            return False
+        if not (0.0 < peso <= 1.0):
+            return False
     return True
 
 

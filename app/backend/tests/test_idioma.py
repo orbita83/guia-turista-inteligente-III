@@ -14,6 +14,7 @@ from app.schemas.events import (
     DlqEvent,
     WeatherRequest,
 )
+from app.services.events import resolver_idioma_seguro
 from app.services.guide import montar_instrucao_idioma_chat
 from app.services.idioma import (
     IDIOMA_PADRAO,
@@ -65,12 +66,15 @@ def test_resolver_idioma_le_apenas_o_primeiro_valor_e_ignora_q_valido() -> None:
         "en;q=abc",
         "en; invalid",
         "en;q=",
+        "en;foo=bar",
+        "pt-BR;level=1",
     ],
 )
 def test_resolver_idioma_retorna_pt_br_para_desconhecido_vazio_ou_q_zero(
     entrada_invalida: str | None,
 ) -> None:
     assert resolver_idioma(entrada_invalida) == IDIOMA_PADRAO
+    assert resolver_idioma_seguro(entrada_invalida) == IDIOMA_PADRAO
 
 
 def test_resolver_idioma_respeita_limite_de_128_bytes() -> None:
