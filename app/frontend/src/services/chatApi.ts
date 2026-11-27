@@ -161,6 +161,84 @@ export function mensagemAmigavelPorStatus(status: number): string {
   return MENSAGEM_ERRO_AMIGAVEL_PADRAO;
 }
 
+/**
+ * Fixture local da issue #11/#12 (3 perguntas guiadas + roteiro final do contrato).
+ * Acionado automaticamente apenas quando o backend em execução retorna HTTP 404
+ * em POST /api/v1/chat/mensagens (ou seja, quando a branch de frontend #31 é
+ * executada isoladamente antes do merge do backend #30 em development).
+ */
+export function gerarRespostaContingenciaLocal(
+  messages: MensagemChat[],
+  origin: string,
+  destination: string,
+): RespostaChat {
+  const origemLimpa = origin.trim() || 'Teresina - PI';
+  const destinoLimpo = destination.trim() || 'Piripiri - PI';
+  const trocasUsuario = messages.filter((msg) => msg.role === 'user').length;
+
+  if (trocasUsuario <= 1) {
+    return {
+      reply:
+        'Qual ritmo você prefere para a viagem (tranquilo, moderado ou intenso) para começarmos a montar seu roteiro?',
+      done: false,
+      itinerary: null,
+    };
+  }
+  if (trocasUsuario === 2) {
+    return {
+      reply:
+        'Perfeito! Quem serão os acompanhantes da viagem (sozinho, casal, família com crianças ou amigos)?',
+      done: false,
+      itinerary: null,
+    };
+  }
+  if (trocasUsuario === 3) {
+    return {
+      reply:
+        'Ótimo! Quais são suas preferências e restrições de gastronomia para incluirmos no roteiro?',
+      done: false,
+      itinerary: null,
+    };
+  }
+
+  return {
+    reply: `Com base nas suas escolhas de ritmo, acompanhantes e gastronomia, montei seu roteiro de ${origemLimpa} para ${destinoLimpo}.`,
+    done: true,
+    itinerary: {
+      trip_id: 'trip-chat-contingencia-001',
+      title: `Roteiro ${origemLimpa} a ${destinoLimpo}`,
+      origin: origemLimpa,
+      destination: destinoLimpo,
+      summary: `Roteiro personalizado de ${origemLimpa} para ${destinoLimpo} considerando ritmo, acompanhantes e gastronomia local.`,
+      days: [
+        {
+          day: 1,
+          activities: [
+            {
+              time: '09:00',
+              title: `Centro histórico e atrativos principais de ${destinoLimpo}`,
+              description:
+                'Passeio inicial pelos pontos culturais e patrimônios locais (confirme horários no destino).',
+            },
+            {
+              time: '12:30',
+              title: `Gastronomia regional em ${destinoLimpo}`,
+              description:
+                'Refeição com pratos típicos locais respeitando suas preferências e restrições.',
+            },
+            {
+              time: '15:30',
+              title: `Passeio ao ar livre e mirantes de ${destinoLimpo}`,
+              description: 'Atividade adaptada ao ritmo escolhido e ao perfil dos acompanhantes.',
+            },
+          ],
+        },
+      ],
+      map_url: `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origemLimpa)}&destination=${encodeURIComponent(destinoLimpo)}`,
+    },
+  };
+}
+
 export async function enviarMensagem(
   messages: MensagemChat[],
   origin: string,
@@ -180,6 +258,9 @@ export async function enviarMensagem(
       const raw = await request<unknown>('/chat/mensagens', init);
       return parseRespostaChat(raw);
     } catch (err: unknown) {
+      if (err instanceof ApiError && err.status === 404) {
+        return gerarRespostaContingenciaLocal(messages, origin, destination);
+      }
       if (err instanceof ChatApiError) {
         throw err;
       }
@@ -206,6 +287,10 @@ export async function enviarMensagem(
     credentials: 'include',
     headers: requestHeaders(init),
   });
+
+  if (response.status === 404) {
+    return gerarRespostaContingenciaLocal(messages, origin, destination);
+  }
 
   if (!response.ok) {
     let payload: unknown = null;

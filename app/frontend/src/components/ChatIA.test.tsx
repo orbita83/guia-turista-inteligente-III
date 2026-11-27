@@ -359,4 +359,32 @@ describe('ChatIA e chatApi (Issue #12 · T0016)', () => {
     expect(campoMensagem).toBeDisabled();
     expect(botaoEnviar).toBeDisabled();
   });
+
+  it('usa o fixture de contingência local em 4 trocas quando o backend ainda não expõe POST /api/v1/chat/mensagens (404)', async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json({ detail: 'Not Found' }, { status: 404 })),
+    );
+
+    render(<ChatIA />);
+    const campoMensagem = screen.getByLabelText('Mensagem para o assistente');
+
+    await user.type(campoMensagem, 'Olá, quero montar um roteiro{Enter}');
+    expect(await screen.findByText(/Qual ritmo você prefere/i)).toBeInTheDocument();
+
+    await user.type(campoMensagem, 'Ritmo tranquilo{Enter}');
+    expect(await screen.findByText(/Quem serão os acompanhantes/i)).toBeInTheDocument();
+
+    await user.type(campoMensagem, 'Casal{Enter}');
+    expect(
+      await screen.findByText(/preferências e restrições de gastronomia/i),
+    ).toBeInTheDocument();
+
+    await user.type(campoMensagem, 'Culinária regional sem restrições{Enter}');
+    expect(
+      await screen.findByRole('heading', { name: 'Roteiro Teresina - PI a Piripiri - PI' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });
