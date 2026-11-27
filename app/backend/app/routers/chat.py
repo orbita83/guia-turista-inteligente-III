@@ -11,10 +11,8 @@ from app.core.circuit_breaker import CircuitBreaker
 from app.core.config import Settings, get_settings
 from app.core.dependencies import get_circuit_breakers, get_current_user
 from app.schemas.chat import RequisicaoChat, RespostaChat
-from app.services.guide import (
-    _resolver_idioma_compat,
-    conversar_roteiro,
-)
+from app.services.guide import conversar_roteiro
+from app.services.idioma import resolver_idioma
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
@@ -30,7 +28,7 @@ def limpar_rate_limit_chat() -> None:
 
 def obter_idioma_requisicao(request: Request) -> str:
     """Extrai e resolve o idioma da requisição a partir do cabeçalho Accept-Language."""
-    return _resolver_idioma_compat(request.headers.get("accept-language"))
+    return resolver_idioma(request.headers.get("accept-language"))
 
 
 def _chave_sessao_chat(request: Request, user: dict[str, Any]) -> str:

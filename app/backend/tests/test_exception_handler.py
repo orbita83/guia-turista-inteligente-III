@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import Generator
 from time import perf_counter
 from typing import Any
@@ -20,7 +21,13 @@ from app.core.config import REPOSITORY_ROOT, get_settings
 from app.core.dependencies import get_current_user
 from app.main import app
 from app.routers import trips as trips_router
-from app.services.events import resetar_total_eventos_dlq
+from app.schemas.events import DLQ_EVENT_EXAMPLE
+from app.services import events as events_service
+from app.services.events import (
+    limpar_cache_ssl_n8n,
+    publicar_evento,
+    resetar_total_eventos_dlq,
+)
 
 DLQ_SCHEMA_PATH = (
     REPOSITORY_ROOT
@@ -42,6 +49,7 @@ def _isolamento_config_e_contador() -> Generator[None, None, None]:
     yield
     get_settings.cache_clear()
     resetar_total_eventos_dlq()
+    limpar_cache_ssl_n8n()
 
 
 @pytest.fixture
@@ -146,9 +154,13 @@ async def test_resposta_500_nao_espera_n8n_lento_e_loga_apos_resposta(
     resposta_entregue = asyncio.Event()
     mensagens_enviadas: list[dict[str, Any]] = []
     requisicao_lida = False
+    entregue_em: float | None = None
+    n8n_concluido_em: float | None = None
 
     async def atraso_n8n(_request: httpx.Request) -> httpx.Response:
+        nonlocal n8n_concluido_em
         await asyncio.sleep(5.0)
+        n8n_concluido_em = perf_counter()
         return httpx.Response(202, json={"message": "Workflow was started"})
 
     scope: dict[str, Any] = {
@@ -174,10 +186,12 @@ async def test_resposta_500_nao_espera_n8n_lento_e_loga_apos_resposta(
         return {"type": "http.disconnect"}
 
     async def send(message: Message) -> None:
+        nonlocal entregue_em
         mensagens_enviadas.append(dict(message))
         if message["type"] == "http.response.body" and not message.get(
             "more_body", False
         ):
+            entregue_em = perf_counter()
             resposta_entregue.set()
 
     with (
@@ -192,22 +206,105 @@ async def test_resposta_500_nao_espera_n8n_lento_e_loga_apos_resposta(
         tarefa_asgi = asyncio.create_task(app(scope, receive, send))
 
         await asyncio.wait_for(resposta_entregue.wait(), timeout=1.0)
-        latencia_resposta = perf_counter() - inicio
+        latencia_despertar = perf_counter() - inicio
+        assert entregue_em is not None
+        latencia_entrega = entregue_em - inicio
 
-        # No instante em que a resposta HTTP 500 já foi entregue ao cliente,
-        # o envio ao n8n (5 s) ainda está em andamento: log final ainda não existe.
-        assert latencia_resposta < 1.0
+        # Tanto a entrega real do body HTTP 500 quanto o retorno do controle ao
+        # event loop ocorrem em < 1 s, enquanto o envio de 5 s ao n8n segue ativo.
+        assert latencia_entrega < 1.0
+        assert latencia_despertar < 1.0
         assert "evento enviado ao n8n" not in caplog.text
 
         with pytest.raises(RuntimeError, match="Falha interna simulada"):
             await tarefa_asgi
 
+    assert n8n_concluido_em is not None
+    assert n8n_concluido_em - entregue_em >= 4.0
     inicio_msg = next(m for m in mensagens_enviadas if m["type"] == "http.response.start")
     corpo_msg = next(m for m in mensagens_enviadas if m["type"] == "http.response.body")
     assert inicio_msg["status"] == 500
     corpo_json = json.loads(corpo_msg["body"].decode("utf-8"))
     assert set(corpo_json.keys()) == {"detail", "trace_id"}
     assert "evento enviado ao n8n" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_publicar_evento_reutiliza_ssl_context_e_nao_bloqueia_event_loop_no_cold_load(
+    monkeypatch: pytest.MonkeyPatch,
+    rota_falha_registrada: str,
+) -> None:
+    """Regressão #39: carga fria lenta de certificados CA roda fora do event loop e é cacheada."""
+    monkeypatch.setenv("N8N_WEBHOOK_BASE_URL", "https://n8n.exemplo.test/webhook")
+    monkeypatch.setenv("N8N_WEBHOOK_SECRET", "segredo-webhook")
+    monkeypatch.setenv("N8N_TIMEOUT_SECONDS", "10")
+    get_settings.cache_clear()
+    limpar_cache_ssl_n8n()
+
+    criacoes_ssl = 0
+    criar_real = httpx.create_ssl_context
+
+    def criar_ssl_lento(*args: Any, **kwargs: Any) -> Any:
+        nonlocal criacoes_ssl
+        criacoes_ssl += 1
+        time.sleep(1.65)
+        return criar_real(*args, **kwargs)
+
+    monkeypatch.setattr(events_service.httpx, "create_ssl_context", criar_ssl_lento)
+
+    resposta_entregue = asyncio.Event()
+    requisicao_lida = False
+
+    scope: dict[str, Any] = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/v1/roteiros/abc/falha-simulada-teste",
+        "raw_path": b"/api/v1/roteiros/abc/falha-simulada-teste",
+        "query_string": b"",
+        "headers": [],
+        "client": ("127.0.0.1", 50000),
+        "server": ("testserver", 80),
+    }
+
+    async def receive() -> dict[str, Any]:
+        nonlocal requisicao_lida
+        if not requisicao_lida:
+            requisicao_lida = True
+            return {"type": "http.request", "body": b"{}", "more_body": False}
+        await asyncio.Event().wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message: Message) -> None:
+        if message["type"] == "http.response.body" and not message.get(
+            "more_body", False
+        ):
+            resposta_entregue.set()
+
+    with respx.mock(assert_all_called=True) as router:
+        rota_n8n = router.post(
+            "https://n8n.exemplo.test/webhook/turismo-dlq"
+        ).mock(return_value=httpx.Response(202))
+
+        inicio = perf_counter()
+        tarefa_asgi = asyncio.create_task(app(scope, receive, send))
+
+        # Mesmo com create_ssl_context bloqueando 1,65 s (cenário reproduzido na #39),
+        # o event loop acorda imediatamente (< 250 ms) graças ao run_in_threadpool.
+        await asyncio.wait_for(resposta_entregue.wait(), timeout=0.5)
+        latencia_despertar = perf_counter() - inicio
+        assert latencia_despertar < 0.5
+
+        with pytest.raises(RuntimeError, match="Falha interna simulada"):
+            await tarefa_asgi
+
+        # Segunda chamada reutiliza o SSLContext em cache sem recarregar CA.
+        await publicar_evento("turismo-dlq", DLQ_EVENT_EXAMPLE)
+
+    assert criacoes_ssl == 1
+    assert rota_n8n.call_count == 2
 
 
 @pytest.mark.parametrize(

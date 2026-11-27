@@ -1,7 +1,6 @@
 """Geração de guia turístico pelo Gemini com a contingência do monólito."""
 
 import asyncio
-import importlib
 import json
 import re
 from collections.abc import AsyncGenerator
@@ -15,6 +14,7 @@ from google.genai import errors, types
 from pydantic import ValidationError
 
 from app.schemas.events import Itinerary
+from app.services.idioma import instrucao_idioma_prompt, resolver_idioma
 
 MODEL = "gemini-3.6-flash"
 GUIDE_INSTRUCTIONS = (
@@ -297,86 +297,9 @@ async def get_guide(destination: str, *, api_key: str, timeout_seconds: float) -
     return text
 
 
-_FALLBACK_SUPPORTED_LANGUAGES: tuple[str, ...] = (
-    "pt-BR",
-    "en",
-    "es",
-    "fr",
-    "zh-CN",
-    "hi",
-    "ar",
-    "ru",
-)
-_FALLBACK_LANGUAGE_MAP: dict[str, str] = {
-    code.lower(): code for code in _FALLBACK_SUPPORTED_LANGUAGES
-}
-_FALLBACK_LANGUAGE_NAMES: dict[str, str] = {
-    "pt-BR": "Português (pt-BR)",
-    "en": "Inglês (en)",
-    "es": "Espanhol (es)",
-    "fr": "Francês (fr)",
-    "zh-CN": "Mandarim simplificado (zh-CN)",
-    "hi": "Hindi (hi)",
-    "ar": "Árabe (ar)",
-    "ru": "Russo (ru)",
-}
-
-
-def _resolver_idioma_compat(accept_language: str | None) -> str:
-    """Usa services.idioma.resolver_idioma quando disponível (#13a) ou fallback equivalente."""
-    try:
-        modulo_idioma = importlib.import_module("app.services.idioma")
-        resolver_oficial = getattr(modulo_idioma, "resolver_idioma", None)
-        if callable(resolver_oficial):
-            return str(resolver_oficial(accept_language))
-    except ImportError:
-        pass
-
-    if not isinstance(accept_language, str):
-        return "pt-BR"
-    if len(accept_language.encode("utf-8")) > 128:
-        return "pt-BR"
-    first_item = accept_language.split(",", 1)[0].strip()
-    if not first_item:
-        return "pt-BR"
-    parts = first_item.split(";")
-    raw_code = parts[0].strip()
-    if not raw_code or raw_code == "*":
-        return "pt-BR"
-    for param in parts[1:]:
-        text = param.strip()
-        if not text or "=" not in text:
-            return "pt-BR"
-        key, value = (piece.strip() for piece in text.split("=", 1))
-        if not key or not value or key.lower() != "q":
-            return "pt-BR"
-        try:
-            weight = float(value)
-        except ValueError:
-            return "pt-BR"
-        if not (0.0 < weight <= 1.0):
-            return "pt-BR"
-    return _FALLBACK_LANGUAGE_MAP.get(raw_code.lower(), "pt-BR")
-
-
 def montar_instrucao_idioma_chat(accept_language: str | None = None) -> str:
     """Retorna a instrução de idioma para o prompt do chat sem traduzir nomes próprios locais."""
-    try:
-        modulo_idioma = importlib.import_module("app.services.idioma")
-        instrucao_oficial = getattr(modulo_idioma, "instrucao_idioma_prompt", None)
-        if callable(instrucao_oficial):
-            return str(instrucao_oficial(accept_language))
-    except ImportError:
-        pass
-    codigo = _resolver_idioma_compat(accept_language)
-    nome = _FALLBACK_LANGUAGE_NAMES[codigo]
-    return (
-        f"Responda obrigatoriamente no idioma {nome} (código {codigo}). "
-        "Não traduza nomes próprios de patrimônios, atrativos, cidades e pratos locais "
-        '(ex.: "Cachoeira do Urubu", "Parque Nacional de Sete Cidades", "Maria Isabel"); '
-        "mantenha sempre o nome original em português e, se útil, "
-        "explique o significado entre parênteses no idioma da resposta."
-    )
+    return instrucao_idioma_prompt(accept_language)
 
 
 def montar_prompt_sistema_chat(accept_language: str | None = None) -> str:
@@ -640,7 +563,7 @@ def _build_fallback_itinerary(
     """Constrói um Itinerary de contingência válido sem fabricar distância/duração irreais."""
     origem_limpa = clean_guide_text(origin).strip() or "Origem"
     destino_limpo = clean_guide_text(destination).strip() or "Destino"
-    idioma = _resolver_idioma_compat(accept_language)
+    idioma = resolver_idioma(accept_language)
     tpl = _FALLBACK_CHAT_TEMPLATES.get(idioma, _FALLBACK_CHAT_TEMPLATES["pt-BR"])
 
     itinerary = Itinerary.model_validate(
@@ -684,7 +607,7 @@ def _fallback_chat_response(
     accept_language: str | None = None,
 ) -> dict[str, Any]:
     """Contingência determinística por regras locais (ritmo -> acompanhantes -> gastronomia)."""
-    idioma = _resolver_idioma_compat(accept_language)
+    idioma = resolver_idioma(accept_language)
     tpl = _FALLBACK_CHAT_TEMPLATES.get(idioma, _FALLBACK_CHAT_TEMPLATES["pt-BR"])
     user_turns = sum(1 for msg in messages if msg.get("role") == "user")
     if user_turns <= 1:
@@ -721,7 +644,7 @@ def _request_chat_json(
     accept_language: str | None = None,
 ) -> str:
     """Executa uma chamada síncrona ao Gemini solicitando resposta JSON estruturada para o chat."""
-    idioma = _resolver_idioma_compat(accept_language)
+    idioma = resolver_idioma(accept_language)
     payload = {
         "origin": origin,
         "destination": destination,
