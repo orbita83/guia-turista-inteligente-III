@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 
 import { ApiError } from '../services/api';
-import { ChatApiError, enviarMensagem } from '../services/chatApi';
+import { ChatApiError, detectarIdiomaMensagem, enviarMensagem } from '../services/chatApi';
 import type { Itinerary } from '../types/chat';
 import { ChatIA } from './ChatIA';
 
@@ -386,5 +386,77 @@ describe('ChatIA e chatApi (Issue #12 · T0016)', () => {
       await screen.findByRole('heading', { name: 'Roteiro Teresina - PI a Piripiri - PI' }),
     ).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('detecta automaticamente os 8 idiomas digitados, envia Accept-Language e responde no mesmo idioma preservando nomes próprios', async () => {
+    expect(
+      detectarIdiomaMensagem([{ role: 'user', content: 'Olá, quero montar um roteiro' }]),
+    ).toBe('pt-BR');
+    expect(
+      detectarIdiomaMensagem([{ role: 'user', content: 'Hello, I want to plan a relaxed trip' }]),
+    ).toBe('en');
+    expect(
+      detectarIdiomaMensagem([
+        { role: 'user', content: 'Hola, quiero planear un viaje tranquilo' },
+      ]),
+    ).toBe('es');
+    expect(
+      detectarIdiomaMensagem([{ role: 'user', content: 'Bonjour, je veux planifier un voyage' }]),
+    ).toBe('fr');
+    expect(detectarIdiomaMensagem([{ role: 'user', content: '我想要轻松的旅行行程' }])).toBe(
+      'zh-CN',
+    );
+    expect(detectarIdiomaMensagem([{ role: 'user', content: 'मुझे शांत यात्रा कार्यक्रम चाहिए' }])).toBe(
+      'hi',
+    );
+    expect(detectarIdiomaMensagem([{ role: 'user', content: 'أريد رحلة هادئة' }])).toBe('ar');
+    expect(
+      detectarIdiomaMensagem([{ role: 'user', content: 'Я хочу спокойное путешествие' }]),
+    ).toBe('ru');
+    // Preserva o idioma da mensagem anterior quando a última resposta é neutra ("ok")
+    expect(
+      detectarIdiomaMensagem([
+        { role: 'user', content: 'Hello, I want to plan a trip' },
+        { role: 'assistant', content: 'What travel pace do you prefer?' },
+        { role: 'user', content: 'ok' },
+      ]),
+    ).toBe('en');
+
+    const headersRecebidos: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const hdrs = new Headers(init?.headers);
+        headersRecebidos.push(hdrs.get('Accept-Language') ?? '');
+        return Response.json({ detail: 'Not Found' }, { status: 404 });
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(<ChatIA />);
+
+    const campoDestino = screen.getByLabelText('Destino do roteiro no chat');
+    fireEvent.change(campoDestino, { target: { value: 'Parque Nacional de Sete Cidades' } });
+
+    const campoMensagem = screen.getByLabelText('Mensagem para o assistente');
+    await user.type(campoMensagem, 'Hello, I want to plan a trip{Enter}');
+    expect(await screen.findByText(/What travel pace do you prefer/i)).toBeInTheDocument();
+
+    await user.type(campoMensagem, 'Relaxed pace please{Enter}');
+    expect(await screen.findByText(/Who will be traveling with you/i)).toBeInTheDocument();
+
+    await user.type(campoMensagem, 'Traveling as a couple{Enter}');
+    expect(await screen.findByText(/What are your food preferences/i)).toBeInTheDocument();
+
+    await user.type(campoMensagem, 'Local food with no restrictions{Enter}');
+    expect(
+      await screen.findByRole('heading', {
+        name: 'Itinerary Teresina - PI to Parque Nacional de Sete Cidades',
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Historic center and main landmarks of Parque Nacional de Sete Cidades'),
+    ).toBeInTheDocument();
+    expect(headersRecebidos).toEqual(['en', 'en', 'en', 'en']);
   });
 });
