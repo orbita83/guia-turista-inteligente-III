@@ -88,3 +88,17 @@ As [evidências de QA](docs/qualidade/evidencias-qa.md) registram os cenários e
 executados. O [roteiro do aluno 4](docs/operacao/apresentacao-aluno-4.md) inclui uma
 demonstração isolada com provedores controlados, exemplos SSE/409/cancelamento,
 download GPX e métricas Prometheus.
+
+---
+
+## 🔗 Spec 003: integração EDA com n8n
+
+A documentação das evidências, arquitetura orientada a eventos (`backend → n8n → Telegram/e-mail`) e workflows exportados da Spec 003 está centralizada em [`docs/evidencias/README.md`](docs/evidencias/README.md).
+
+Para clonar o repositório oficial desta entrega (Spec 003):
+
+```bash
+git clone https://github.com/orbita83/guia-turista-inteligente-III.git
+cd guia-turista-inteligente-III
+```
+
